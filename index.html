@@ -701,6 +701,30 @@ function showModal(id) {
 }
 function hideModal(id) { $('#' + id).classList.remove('show'); }
 
+const IMG_RE = /\.(png|jpg|jpeg|webp|gif)$/i;
+
+// Recursively list all image files under a folder path
+// Returns array of { name, path } sorted by path
+async function listImagesRecursive(folderPath) {
+  const results = [];
+  const queue = [folderPath];
+  while (queue.length > 0) {
+    const dir = queue.shift();
+    let entries;
+    try { entries = await App.storage.list(dir); } catch(e) { continue; }
+    for (const e of entries) {
+      if (e['.tag'] === 'folder') {
+        queue.push(dir + '/' + e.name);
+      } else if (e['.tag'] === 'file' && IMG_RE.test(e.name)) {
+        const relPath = dir + '/' + e.name;
+        results.push({ name: e.name, path: relPath });
+      }
+    }
+  }
+  results.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
+  return results;
+}
+
 // ============================================================
 // METADATA
 // ============================================================
@@ -876,18 +900,8 @@ async function loadCover(bookId, card) {
     return;
   }
   try {
-    // Try to get first image
     const meta = App.metadata.books[bookId];
-    const coverFile = (meta && meta.coverImage) || '';
-
-    let entries = [];
-    try {
-      entries = await App.storage.list('books/' + bookId);
-    } catch(e) { return; }
-
-    const images = entries
-      .filter(e => e['.tag'] === 'file' && /\.(png|jpg|jpeg|webp|gif)$/i.test(e.name))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const images = await listImagesRecursive('books/' + bookId);
 
     if (images.length === 0) return;
 
@@ -895,13 +909,14 @@ async function loadCover(bookId, card) {
     if (App.metadata.books[bookId]) {
       App.metadata.books[bookId].totalPages = images.length;
       if (!App.metadata.books[bookId].coverImage) {
-        App.metadata.books[bookId].coverImage = images[0].name;
+        App.metadata.books[bookId].coverImage = images[0].path;
       }
     }
 
-    const target = coverFile && images.find(i => i.name === coverFile) ? coverFile : images[0].name;
-    const buf = await App.storage.loadBinary('books/' + bookId + '/' + target);
-    const ext = target.split('.').pop().toLowerCase();
+    const coverPath = (meta && meta.coverImage && images.find(i => i.path === meta.coverImage))
+      ? meta.coverImage : images[0].path;
+    const buf = await App.storage.loadBinary(coverPath);
+    const ext = coverPath.split('.').pop().toLowerCase();
     const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
     const blob = new Blob([buf], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -1003,6 +1018,9 @@ function showCtxMenu(x, y, bookId) {
     html += `<div class="ctx-item danger" data-action="removecurrent">このリストから削除</div>`;
   }
 
+  // Delete book
+  html += `<div class="ctx-item danger" data-action="deletebook">フォルダ削除</div>`;
+
   menu.innerHTML = html;
 
   // Position
@@ -1023,6 +1041,7 @@ function showCtxMenu(x, y, bookId) {
       else if (action === 'addlist') addToList(bookId, item.dataset.list);
       else if (action === 'removelist') removeFromList(bookId, item.dataset.list);
       else if (action === 'removecurrent') removeFromList(bookId, App.currentList);
+      else if (action === 'deletebook') deleteBook(bookId);
       hideCtxMenu();
     };
   });
@@ -1030,6 +1049,35 @@ function showCtxMenu(x, y, bookId) {
 
 function hideCtxMenu() {
   $('#ctx-menu').classList.remove('show');
+}
+
+async function deleteBook(bookId) {
+  const meta = App.metadata.books[bookId] || {};
+  const title = meta.title || bookId;
+  if (!confirm(`「${title}」をDropboxから完全に削除しますか？\nこの操作は取り消せません。`)) return;
+
+  toast('削除中...');
+  try {
+    await App.storage.delete('books/' + bookId);
+  } catch (e) {
+    console.error('Failed to delete folder:', e);
+    toast('フォルダ削除に失敗しました');
+    return;
+  }
+
+  // Remove from metadata
+  delete App.metadata.books[bookId];
+  await saveMetadata();
+
+  // Remove from local state
+  App.bookFolders = App.bookFolders.filter(f => f.id !== bookId);
+  if (App.coverCache[bookId]) {
+    URL.revokeObjectURL(App.coverCache[bookId]);
+    delete App.coverCache[bookId];
+  }
+
+  renderGrid();
+  toast(`「${title}」を削除しました`);
 }
 
 // ============================================================
@@ -1052,13 +1100,10 @@ async function openReader(bookId) {
 
   // Load page list
   try {
-    const entries = await App.storage.list('books/' + bookId);
-    const images = entries
-      .filter(e => e['.tag'] === 'file' && /\.(png|jpg|jpeg|webp|gif)$/i.test(e.name))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const images = await listImagesRecursive('books/' + bookId);
 
     App.totalPages = images.length;
-    App.pageNames = images.map(e => e.name);
+    App.pagePaths = images.map(e => e.path);
 
     // Update metadata
     if (App.metadata.books[bookId]) {
@@ -1094,7 +1139,7 @@ async function showPage(pageNum) {
   updatePageLabel();
 
   const bookId = App.currentBook;
-  const pageName = App.pageNames[pageNum];
+  const pagePath = App.pagePaths[pageNum];
 
   // Check cache
   if (App.pageCache[pageNum]) {
@@ -1108,8 +1153,8 @@ async function showPage(pageNum) {
   $('#reader-loading').style.display = 'flex';
 
   try {
-    const buf = await App.storage.loadBinary('books/' + bookId + '/' + pageName);
-    const ext = pageName.split('.').pop().toLowerCase();
+    const buf = await App.storage.loadBinary(pagePath);
+    const ext = pagePath.split('.').pop().toLowerCase();
     const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
     const blob = new Blob([buf], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -1140,11 +1185,10 @@ async function prefetchPage(pageNum) {
   if (pageNum < 0 || pageNum >= App.totalPages) return;
   if (App.pageCache[pageNum]) return;
 
-  const bookId = App.currentBook;
-  const pageName = App.pageNames[pageNum];
+  const pagePath = App.pagePaths[pageNum];
   try {
-    const buf = await App.storage.loadBinary('books/' + bookId + '/' + pageName);
-    const ext = pageName.split('.').pop().toLowerCase();
+    const buf = await App.storage.loadBinary(pagePath);
+    const ext = pagePath.split('.').pop().toLowerCase();
     const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
     const blob = new Blob([buf], { type: mime });
     App.pageCache[pageNum] = URL.createObjectURL(blob);
