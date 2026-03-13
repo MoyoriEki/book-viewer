@@ -662,8 +662,13 @@
 <!-- ========== FOLDER BROWSER MODAL ========== -->
 <div class="modal-overlay" id="modal-folder">
   <div class="modal-box" style="width: 420px;">
-    <div class="folder-modal-title" id="folder-modal-title"></div>
-    <div class="folder-modal-path" id="folder-modal-path"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="overflow:hidden;">
+        <div class="folder-modal-title" id="folder-modal-title"></div>
+        <div class="folder-modal-path" id="folder-modal-path"></div>
+      </div>
+      <button class="modal-btn" id="folder-modal-delete" style="color:var(--danger);border-color:var(--danger);flex-shrink:0;font-size:12px;">フォルダ削除</button>
+    </div>
     <div class="folder-tree" id="folder-tree"></div>
     <div class="modal-actions">
       <button class="modal-btn" id="folder-modal-close">閉じる</button>
@@ -731,19 +736,14 @@ function init() {
   $('#reader-slider').oninput = onSliderChange;
   $('#reader-binding-btn').onclick = toggleBinding;
 
-  // Mouse move → show UI
-  $('#reader-screen').addEventListener('mousemove', onReaderMouseMove);
-  // Keep toolbar visible while hovering over it
-  for (const el of [$('#reader-toolbar'), $('#reader-topbar')]) {
-    el.addEventListener('mouseenter', onToolbarInteraction);
-    el.addEventListener('mouseleave', onToolbarLeave);
-  }
-
   // Keyboard
   document.addEventListener('keydown', onKeyDown);
 
   // Swipe
   setupSwipe();
+
+  // Scroll page nav
+  setupScroll();
 
   // Context menu dismiss
   document.addEventListener('click', () => hideCtxMenu());
@@ -1107,8 +1107,7 @@ function showCtxMenu(x, y, bookId) {
   }
 
   // Delete book
-  html += `<div class="ctx-item" data-action="folder">フォルダ構造</div>`;
-  html += `<div class="ctx-item danger" data-action="deletebook">フォルダ削除</div>`;
+  html += `<div class="ctx-item" data-action="folder">フォルダ</div>`;
 
   menu.innerHTML = html;
 
@@ -1130,7 +1129,6 @@ function showCtxMenu(x, y, bookId) {
       else if (action === 'addlist') addToList(bookId, item.dataset.list);
       else if (action === 'removelist') removeFromList(bookId, item.dataset.list);
       else if (action === 'removecurrent') removeFromList(bookId, App.currentList);
-      else if (action === 'deletebook') deleteBook(bookId);
       else if (action === 'folder') openFolderBrowser(bookId);
       hideCtxMenu();
     };
@@ -1179,6 +1177,12 @@ async function openFolderBrowser(bookId) {
   $('#folder-modal-path').textContent = 'books/' + bookId;
   $('#folder-tree').innerHTML = '<div class="shelf-loading"><div class="spinner"></div></div>';
   showModal('modal-folder');
+
+  // Delete entire book folder button
+  $('#folder-modal-delete').onclick = async () => {
+    hideModal('modal-folder');
+    await deleteBook(bookId);
+  };
 
   const tree = await buildFolderTree('books/' + bookId, 0);
   $('#folder-tree').innerHTML = tree.length > 0 ? '' : '<div style="color:var(--text-muted);font-size:13px;padding:12px 0;">空のフォルダ</div>';
@@ -1261,10 +1265,8 @@ async function openReader(bookId) {
   App.currentBook = bookId;
   App.pageCache = {};
   App.toolbarVisible = false;
-  clearTimeout(toolbarTimer);
   $('#reader-toolbar').classList.remove('visible');
   $('#reader-topbar').classList.remove('visible');
-  $('#reader-screen').style.cursor = 'none';
 
   const meta = App.metadata.books[bookId] || {};
   $('#reader-title').textContent = meta.title || bookId;
@@ -1432,48 +1434,10 @@ function tapNav(side) {
   }
 }
 
-let toolbarTimer = null;
-
-function showToolbar() {
-  App.toolbarVisible = true;
-  $('#reader-toolbar').classList.add('visible');
-  $('#reader-topbar').classList.add('visible');
-  $('#reader-screen').style.cursor = '';
-  resetToolbarTimer();
-}
-
-function hideToolbar() {
-  App.toolbarVisible = false;
-  $('#reader-toolbar').classList.remove('visible');
-  $('#reader-topbar').classList.remove('visible');
-  $('#reader-screen').style.cursor = 'none';
-}
-
-function resetToolbarTimer() {
-  clearTimeout(toolbarTimer);
-  toolbarTimer = setTimeout(hideToolbar, 2500);
-}
-
 function toggleToolbar() {
-  if (App.toolbarVisible) {
-    clearTimeout(toolbarTimer);
-    hideToolbar();
-  } else {
-    showToolbar();
-  }
-}
-
-function onReaderMouseMove() {
-  if ($('#reader-screen').style.display !== 'flex') return;
-  showToolbar();
-}
-
-// Keep toolbar visible while interacting with it
-function onToolbarInteraction() {
-  clearTimeout(toolbarTimer);
-}
-function onToolbarLeave() {
-  if (App.toolbarVisible) resetToolbarTimer();
+  App.toolbarVisible = !App.toolbarVisible;
+  $('#reader-toolbar').classList.toggle('visible', App.toolbarVisible);
+  $('#reader-topbar').classList.toggle('visible', App.toolbarVisible);
 }
 
 function onSliderChange() {
@@ -1564,6 +1528,22 @@ function setupSwipe() {
       binding === 'rtl' ? goPrev() : goNext();
     }
   }, { passive: true });
+}
+
+// ============================================================
+// SCROLL PAGE NAV
+// ============================================================
+function setupScroll() {
+  let lastScroll = 0;
+  $('#reader-screen').addEventListener('wheel', (e) => {
+    if ($('#reader-screen').style.display !== 'flex') return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lastScroll < 250) return; // throttle
+    lastScroll = now;
+    if (e.deltaY > 0) goNext();
+    else if (e.deltaY < 0) goPrev();
+  }, { passive: false });
 }
 
 // ============================================================
