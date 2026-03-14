@@ -1216,22 +1216,13 @@ async function loadCover(bookId, card) {
     }
   }
 
-  // Fanza作品: メタデータのimageSrcから読み込み
+  // Fanza作品: メタデータのimageSrcから読み込み（CORSなしなのでcrossOrigin不要）
   if (FANZA_ID_RE.test(bookId)) {
     const meta = App.metadata.books[bookId];
     if (meta && meta.imageSrc) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      const loaded = await new Promise(resolve => {
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-        img.src = meta.imageSrc;
-      });
-      if (loaded) {
-        App.coverCache[bookId] = meta.imageSrc;
-        setCoverImg(card, meta.imageSrc);
-        return;
-      }
+      App.coverCache[bookId] = meta.imageSrc;
+      setCoverImg(card, meta.imageSrc);
+      return;
     }
   }
 
