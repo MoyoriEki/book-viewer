@@ -1127,7 +1127,18 @@ function renderTabs() {
     const tab = document.createElement('button');
     tab.className = 'shelf-tab' + (App.currentList === name ? ' active' : '');
     tab.textContent = name;
-    tab.onclick = () => { App.currentList = name; renderTabs(); renderGrid(); };
+    tab.onclick = () => {
+      App.currentList = name;
+      // リスト系はカスタムソートをデフォルトに
+      if (name !== 'すべて' && name !== 'DL済み') {
+        App.currentSort = 'custom';
+      } else if (App.currentSort === 'custom') {
+        App.currentSort = 'purchase_desc';
+      }
+      $('#shelf-sort').value = App.currentSort;
+      renderTabs();
+      renderGrid();
+    };
     container.appendChild(tab);
   }
 }
