@@ -142,19 +142,19 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 20px;
+    padding: 12px;
     scrollbar-width: thin;
     scrollbar-color: #333 transparent;
   }
   .shelf-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
     max-width: 1200px;
     margin: 0 auto;
   }
   @media (min-width: 768px) {
-    .shelf-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
+    .shelf-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
   }
 
   /* Book card */
@@ -166,33 +166,33 @@
     background: var(--bg-raised);
     transition: transform 0.15s, box-shadow 0.15s;
   }
-  .book-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .book-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
   .book-card:active { transform: scale(0.97); }
   .book-cover {
     width: 100%;
     aspect-ratio: 1 / 1;
     object-fit: contain;
     display: block;
-    background: #181818;
+    background: #131313;
   }
   .book-cover-placeholder {
     width: 100%;
     aspect-ratio: 1 / 1;
-    background: linear-gradient(135deg, #1a1a1a, #252525);
+    background: linear-gradient(135deg, #1a1a1a, #222);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
-    font-size: 11px;
-    padding: 8px;
+    font-size: 10px;
+    padding: 6px;
     text-align: center;
     word-break: break-all;
   }
   .book-title {
-    padding: 8px 8px 10px;
-    font-size: 11px;
+    padding: 4px 6px 2px;
+    font-size: 10px;
     font-weight: 400;
-    line-height: 1.4;
+    line-height: 1.35;
     color: var(--text-muted);
     overflow: hidden;
     display: -webkit-box;
@@ -200,24 +200,24 @@
     -webkit-box-orient: vertical;
   }
   .book-maker {
-    padding: 0 8px 6px;
-    font-size: 10px;
-    color: #555;
+    padding: 0 6px 4px;
+    font-size: 9px;
+    color: #444;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
   .book-badge {
     position: absolute;
-    top: 6px;
-    left: 6px;
-    font-size: 9px;
+    top: 4px;
+    left: 4px;
+    font-size: 8px;
     font-weight: 600;
-    padding: 2px 5px;
+    padding: 1px 4px;
     border-radius: 3px;
     letter-spacing: 0.03em;
     pointer-events: none;
-    line-height: 1;
+    line-height: 1.2;
   }
   .book-badge.dlsite { background: #1a6fc4; color: #fff; }
   .book-badge.fanza { background: #e04040; color: #fff; }
@@ -227,8 +227,8 @@
   .shelf-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 20px;
+    gap: 6px;
+    padding: 6px 20px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     flex-wrap: wrap;
@@ -236,17 +236,17 @@
   .shelf-control-group {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
   }
   .shelf-control-label {
-    font-size: 11px;
-    color: #555;
-    margin-right: 2px;
+    font-size: 10px;
+    color: #444;
+    margin-right: 1px;
   }
   .shelf-pill {
-    font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 12px;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
     border: 1px solid var(--border);
     background: none;
     color: var(--text-muted);
@@ -261,8 +261,8 @@
     color: var(--accent);
   }
   .shelf-sort-select {
-    font-size: 11px;
-    padding: 3px 8px;
+    font-size: 10px;
+    padding: 2px 6px;
     border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--bg);
@@ -273,19 +273,45 @@
   }
   .shelf-sort-select:focus { border-color: var(--accent); }
   .shelf-book-count {
-    font-size: 11px;
+    font-size: 10px;
     color: #444;
     margin-left: auto;
   }
+
+  /* Hidden books modal */
+  .hidden-list { max-height: 400px; overflow-y: auto; }
+  .hidden-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .hidden-entry:last-child { border-bottom: none; }
+  .hidden-entry-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hidden-entry-store { font-size: 10px; color: #555; flex-shrink: 0; }
+  .hidden-entry-restore {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+  .hidden-entry-restore:hover { border-color: var(--accent); color: var(--accent); }
   }
 
   /* Star button */
   .book-star {
     position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 30px;
-    height: 30px;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: rgba(0,0,0,0.55);
     backdrop-filter: blur(4px);
@@ -294,10 +320,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 15px;
+    font-size: 13px;
     color: #666;
     transition: all 0.15s;
     opacity: 0;
+    z-index: 2;
   }
   .book-card:hover .book-star { opacity: 1; }
   .book-star.active { color: var(--accent); opacity: 1; }
@@ -700,6 +727,7 @@
     <h1>BookViewer</h1>
     <div class="shelf-topbar-actions">
       <button class="btn-icon" id="btn-new-list" title="新しいリスト">＋</button>
+      <button class="btn-icon" id="btn-hidden-books" title="非表示の作品">🚫</button>
       <button class="btn-icon" id="btn-refresh" title="再読み込み">↻</button>
       <button class="btn-icon" id="btn-disconnect" title="接続解除">⏻</button>
     </div>
@@ -789,6 +817,17 @@
   </div>
 </div>
 
+<!-- ========== HIDDEN BOOKS MODAL ========== -->
+<div class="modal-overlay" id="modal-hidden">
+  <div class="modal-box" style="width: 480px;">
+    <h3>非表示の作品</h3>
+    <div class="hidden-list" id="hidden-list"></div>
+    <div class="modal-actions">
+      <button class="modal-btn" id="hidden-modal-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // APP STATE
@@ -871,6 +910,13 @@ function init() {
     if (e.target === $('#modal-folder')) hideModal('modal-folder');
   });
   $('#folder-modal-close').onclick = () => hideModal('modal-folder');
+
+  // Hidden books modal
+  $('#btn-hidden-books').onclick = () => openHiddenBooksModal();
+  $('#modal-hidden').addEventListener('click', (e) => {
+    if (e.target === $('#modal-hidden')) hideModal('modal-hidden');
+  });
+  $('#hidden-modal-close').onclick = () => hideModal('modal-hidden');
 
   // Browser back/forward
   window.addEventListener('popstate', onPopState);
@@ -969,6 +1015,7 @@ async function loadMetadata() {
   if (!App.metadata.books) App.metadata.books = {};
   if (!App.metadata.lists) App.metadata.lists = { 'ふぁぼ': { type: 'default', created: new Date().toISOString().slice(0, 10) } };
   if (!App.metadata.bookmarks) App.metadata.bookmarks = {};
+  if (!App.metadata.hiddenBooks) App.metadata.hiddenBooks = [];
   if (!App.metadata.lists['ふぁぼ']) App.metadata.lists['ふぁぼ'] = { type: 'default', created: new Date().toISOString().slice(0, 10) };
 }
 
@@ -1042,7 +1089,7 @@ async function loadShelf() {
 
 function renderTabs() {
   const container = $('#shelf-tabs');
-  const lists = ['すべて', 'ふぁぼ', ...Object.keys(App.metadata.lists).filter(k => k !== 'ふぁぼ')];
+  const lists = ['すべて', 'DL済み', 'ふぁぼ', ...Object.keys(App.metadata.lists).filter(k => k !== 'ふぁぼ')];
   container.innerHTML = '';
   for (const name of lists) {
     const tab = document.createElement('button');
@@ -1056,8 +1103,14 @@ function renderTabs() {
 function getFilteredBooks() {
   let books = App.bookFolders;
 
+  // Exclude hidden books
+  const hiddenSet = new Set(App.metadata.hiddenBooks || []);
+  books = books.filter(f => !hiddenSet.has(f.id));
+
   // List filter
-  if (App.currentList !== 'すべて') {
+  if (App.currentList === 'DL済み') {
+    books = books.filter(f => !f.metadataOnly);
+  } else if (App.currentList !== 'すべて') {
     books = books.filter(f => {
       const meta = App.metadata.books[f.id];
       return meta && meta.lists && meta.lists.includes(App.currentList);
@@ -1403,6 +1456,62 @@ async function createNewList() {
 }
 
 // ============================================================
+// HIDE / UNHIDE BOOKS
+// ============================================================
+function hideBook(bookId) {
+  if (!App.metadata.hiddenBooks) App.metadata.hiddenBooks = [];
+  if (!App.metadata.hiddenBooks.includes(bookId)) {
+    App.metadata.hiddenBooks.push(bookId);
+    const meta = App.metadata.books[bookId];
+    const title = (meta && meta.title) || bookId;
+    toast(`「${title}」を非表示にしました`);
+    debouncedSave();
+    renderGrid();
+  }
+}
+
+function unhideBook(bookId) {
+  if (!App.metadata.hiddenBooks) return;
+  const idx = App.metadata.hiddenBooks.indexOf(bookId);
+  if (idx >= 0) {
+    App.metadata.hiddenBooks.splice(idx, 1);
+    const meta = App.metadata.books[bookId];
+    const title = (meta && meta.title) || bookId;
+    toast(`「${title}」を再表示しました`);
+    debouncedSave();
+    renderGrid();
+  }
+}
+
+function openHiddenBooksModal() {
+  const list = $('#hidden-list');
+  const hidden = App.metadata.hiddenBooks || [];
+
+  if (hidden.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:16px 0;text-align:center;">非表示の作品はありません</div>';
+  } else {
+    list.innerHTML = '';
+    for (const id of hidden) {
+      const meta = App.metadata.books[id] || {};
+      const row = document.createElement('div');
+      row.className = 'hidden-entry';
+      row.innerHTML = `
+        <span class="hidden-entry-title">${meta.title || id}</span>
+        <span class="hidden-entry-store">${meta.store || ''}</span>
+        <button class="hidden-entry-restore">再表示</button>
+      `;
+      row.querySelector('.hidden-entry-restore').onclick = () => {
+        unhideBook(id);
+        openHiddenBooksModal(); // refresh modal
+      };
+      list.appendChild(row);
+    }
+  }
+
+  showModal('modal-hidden');
+}
+
+// ============================================================
 // CONTEXT MENU
 // ============================================================
 function showCtxMenu(x, y, bookId) {
@@ -1428,6 +1537,7 @@ function showCtxMenu(x, y, bookId) {
 
   // Delete book
   html += `<div class="ctx-item" data-action="folder">フォルダ</div>`;
+  html += `<div class="ctx-item" data-action="hide" style="color:#888;">非表示</div>`;
 
   menu.innerHTML = html;
 
@@ -1449,6 +1559,7 @@ function showCtxMenu(x, y, bookId) {
       else if (action === 'removelist') removeFromList(bookId, item.dataset.list);
       else if (action === 'removecurrent') removeFromList(bookId, App.currentList);
       else if (action === 'folder') openFolderBrowser(bookId);
+      else if (action === 'hide') hideBook(bookId);
       hideCtxMenu();
     };
   });
