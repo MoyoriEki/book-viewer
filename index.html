@@ -6,6 +6,7 @@
 <title>BookViewer</title>
 <link rel="stylesheet" href="https://moyorieki.github.io/storage-bridge/storage-bridge.css">
 <script src="https://moyorieki.github.io/storage-bridge/storage-bridge.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600&display=swap');
 
@@ -390,6 +391,35 @@
   .ctx-item.danger { color: var(--danger); }
   .ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
+  /* Import progress overlay */
+  .import-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .import-overlay.hidden { display: none; }
+  .import-progress-bar {
+    width: 280px;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .import-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s;
+    width: 0%;
+  }
+
   /* ============================================
      READER SCREEN
      ============================================ */
@@ -732,6 +762,7 @@
   <div class="shelf-topbar">
     <h1>BookViewer</h1>
     <div class="shelf-topbar-actions">
+      <button class="btn-icon" id="btn-import" title="ZIPインポート" style="font-size:13px;">📥</button>
       <button class="btn-icon" id="btn-new-list" title="新しいリスト">＋</button>
       <button class="btn-icon" id="btn-refresh" title="再読み込み">↻</button>
       <button class="btn-icon" id="btn-settings" title="設定" style="font-size:14px;">⚙</button>
@@ -805,6 +836,16 @@
 
 <!-- ========== TOAST ========== -->
 <div class="toast" id="toast"></div>
+
+<!-- ========== ZIP IMPORT (hidden input) ========== -->
+<input type="file" id="zip-input" accept=".zip" multiple style="display:none;">
+
+<!-- ========== IMPORT PROGRESS ========== -->
+<div class="import-overlay hidden" id="import-overlay">
+  <div id="import-status">インポート中...</div>
+  <div class="import-progress-bar"><div class="import-progress-fill" id="import-fill"></div></div>
+  <div id="import-detail" style="font-size:11px;color:#888;"></div>
+</div>
 
 <!-- ========== FOLDER BROWSER MODAL ========== -->
 <div class="modal-overlay" id="modal-folder">
@@ -922,6 +963,10 @@ function init() {
 
   // Settings modal
   $('#btn-settings').onclick = () => openSettingsModal();
+
+  // ZIP import
+  $('#btn-import').onclick = () => $('#zip-input').click();
+  $('#zip-input').onchange = onZipSelected;
   $('#modal-settings').addEventListener('click', (e) => {
     if (e.target === $('#modal-settings')) hideModal('modal-settings');
   });
@@ -2060,6 +2105,105 @@ function setupScroll() {
     if (e.deltaY > 0) goNext();
     else if (e.deltaY < 0) goPrev();
   }, { passive: false });
+}
+
+// ============================================================
+// ZIP IMPORT
+// ============================================================
+async function onZipSelected(e) {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+  e.target.value = ''; // reset for re-select
+
+  const overlay = $('#import-overlay');
+  const statusEl = $('#import-status');
+  const detailEl = $('#import-detail');
+  const fillEl = $('#import-fill');
+
+  overlay.classList.remove('hidden');
+  let totalUploaded = 0;
+  let totalFiles = 0;
+
+  for (const file of files) {
+    statusEl.textContent = `ZIP読み込み中: ${file.name}`;
+    detailEl.textContent = '';
+    fillEl.style.width = '0%';
+
+    // ファイル名からフォルダ名を推定
+    // RJxxxxxxxx.zip → RJxxxxxxxx
+    // d_xxxxxx.zip → d_xxxxxx
+    // それ以外 → 拡張子を除去
+    let folderName = file.name.replace(/\.zip$/i, '');
+
+    try {
+      const buf = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(buf);
+
+      // ZIP内のファイルを列挙（フォルダエントリ除外）
+      const entries = [];
+      zip.forEach((relativePath, zipEntry) => {
+        if (!zipEntry.dir) entries.push({ path: relativePath, entry: zipEntry });
+      });
+
+      // 画像ファイルのみフィルタ
+      const imgEntries = entries.filter(e => IMG_RE.test(e.path));
+      totalFiles += imgEntries.length;
+
+      if (imgEntries.length === 0) {
+        toast(`${file.name}: 画像ファイルが見つかりません`);
+        continue;
+      }
+
+      statusEl.textContent = `アップロード中: ${folderName}`;
+      detailEl.textContent = `0 / ${imgEntries.length}`;
+
+      // フォルダ作成（Dropbox APIは自動作成するので不要だが明示的に）
+      const bookPath = 'books/' + folderName;
+
+      // 1ファイルずつアップロード
+      for (let i = 0; i < imgEntries.length; i++) {
+        const { path: entryPath, entry } = imgEntries[i];
+        const data = await entry.async('arraybuffer');
+
+        // ZIP内のパス構造を維持してアップロード
+        const uploadPath = bookPath + '/' + entryPath;
+        await App.storage.save(uploadPath, data);
+
+        totalUploaded++;
+        const pct = Math.round(((i + 1) / imgEntries.length) * 100);
+        fillEl.style.width = pct + '%';
+        detailEl.textContent = `${i + 1} / ${imgEntries.length}`;
+      }
+
+      // メタデータ更新
+      if (!App.metadata.books[folderName]) {
+        App.metadata.books[folderName] = {
+          title: folderName,
+          store: '',
+          purchaseDate: '',
+          tags: [],
+          lists: [],
+          coverImage: '',
+          lastReadPage: 0,
+          bindingDirection: 'rtl',
+          totalPages: imgEntries.length,
+          hiddenPaths: [],
+        };
+      } else {
+        App.metadata.books[folderName].totalPages = imgEntries.length;
+      }
+
+    } catch (err) {
+      console.error('ZIP import error:', err);
+      toast(`${file.name}: インポート失敗 — ${err.message}`);
+    }
+  }
+
+  // 保存 & UI更新
+  await saveMetadata();
+  overlay.classList.add('hidden');
+  toast(`インポート完了: ${totalUploaded}ファイル`);
+  await loadShelf();
 }
 
 // ============================================================
