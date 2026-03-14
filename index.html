@@ -1171,6 +1171,32 @@
   .bm-add-dropdown-item:hover { background: var(--bg-hover); }
   .bm-add-dropdown-item.in-list { color: var(--accent); }
 
+  /* Bookmark browser PC sizing */
+  @media (min-width: 768px) {
+    #modal-bm-browser .bm-entry-thumb { width: 56px; height: 80px; }
+    #modal-bm-browser .bm-all-entry { padding: 12px 20px; gap: 14px; }
+    #modal-bm-browser .bm-entry-page { font-size: 14px; }
+    #modal-bm-browser .bm-all-book { font-size: 12px; }
+    #modal-bm-browser .bm-entry-time { font-size: 11px; }
+    #modal-bm-browser .bm-all-btn { font-size: 12px; padding: 4px 12px; }
+    #modal-bm-browser .bmlist-item-note { font-size: 11px; }
+    .bmlist-item-thumb { width: 52px; height: 72px; }
+    .bmlist-item { padding: 10px 20px; gap: 14px; }
+    .bmlist-item-book { font-size: 13px; }
+    .bmlist-item-page { font-size: 11px; }
+    .bmlist-card { padding: 14px 20px; gap: 14px; }
+    .bmlist-card-icon { font-size: 28px; width: 48px; }
+    .bmlist-card-name { font-size: 15px; }
+    .bmlist-card-count { font-size: 12px; }
+    .bmlist-detail-title { font-size: 16px; }
+    .bmlist-detail-read { font-size: 13px; padding: 8px 18px; }
+    .bmlist-header { padding: 14px 20px; }
+    .bmlist-new-input { font-size: 13px; padding: 8px 12px; }
+    .bmlist-new-btn { font-size: 13px; padding: 8px 18px; }
+    .bm-browser-tab { font-size: 13px; padding: 10px 20px; }
+    .bmlist-drag-handle { font-size: 18px; }
+  }
+
   /* Folder browser modal */
   .folder-tree {
     max-height: 55vh;
@@ -1399,7 +1425,7 @@
 
 <!-- ========== BOOKMARK BROWSER MODAL ========== -->
 <div class="modal-overlay" id="modal-bm-browser">
-  <div class="modal-box" style="width: 520px; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
+  <div class="modal-box" style="width: 680px; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
     <div style="padding: 16px 20px 0; flex-shrink: 0;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <h3 style="margin:0;">🔖 ブックマーク</h3>
@@ -1438,6 +1464,7 @@ const App = {
   bmListItems: [],   // resolved items when reading a bmList: [{ bookId, page, path }]
   bmBrowserTab: 'all',
   bmBrowserDetail: null, // name of bmList being viewed in detail, or null
+  bmListBinding: 'rtl',  // binding direction for bmList reader
 };
 
 // ============================================================
@@ -2728,16 +2755,19 @@ function getBinding() {
 }
 
 function updateBindingBtn() {
-  const rtl = getBinding() === 'rtl';
+  const rtl = App.bmListMode ? App.bmListBinding === 'rtl' : getBinding() === 'rtl';
   $('#reader-binding-btn').textContent = rtl ? '右綴じ' : '左綴じ';
-  // Flip slider direction
   const slider = $('#reader-slider');
   slider.style.direction = rtl ? 'rtl' : 'ltr';
-  // Re-render bookmark dots (positions depend on direction)
-  renderBmDots();
+  if (!App.bmListMode) renderBmDots();
 }
 
 function toggleBinding() {
+  if (App.bmListMode) {
+    App.bmListBinding = App.bmListBinding === 'rtl' ? 'ltr' : 'rtl';
+    updateBindingBtn();
+    return;
+  }
   const meta = App.metadata.books[App.currentBook];
   if (!meta) return;
   meta.bindingDirection = meta.bindingDirection === 'rtl' ? 'ltr' : 'rtl';
@@ -2770,7 +2800,7 @@ function goPrev() {
 }
 
 function tapNav(side) {
-  const binding = App.bmListMode ? 'ltr' : getBinding();
+  const binding = App.bmListMode ? App.bmListBinding : getBinding();
   if (binding === 'rtl') {
     if (side === 'right') goPrev();
     else goNext();
@@ -2853,7 +2883,7 @@ function onKeyDown(e) {
   // Don't capture keys when editing bookmark note
   if (e.target.classList.contains('bm-note-input') || e.target.classList.contains('bmlist-new-input')) return;
 
-  const binding = App.bmListMode ? 'ltr' : getBinding();
+  const binding = App.bmListMode ? App.bmListBinding : getBinding();
   if (e.key === 'ArrowRight') {
     e.preventDefault();
     binding === 'rtl' ? goPrev() : goNext();
@@ -2891,7 +2921,7 @@ function setupSwipe() {
 
     if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx) || dt > 500) return;
 
-    const binding = App.bmListMode ? 'ltr' : getBinding();
+    const binding = App.bmListMode ? App.bmListBinding : getBinding();
     if (dx > 0) {
       // Swipe right
       binding === 'rtl' ? goNext() : goPrev();
@@ -3243,11 +3273,25 @@ function renderBmBrowserAll(body) {
   }
 }
 
+const _bmThumbPathCache = {}; // bookId -> [path, path, ...]
 async function loadBmBrowserThumb(bookId, page, thumbDiv) {
-  // Try cover from store URL for DLsite/Fanza as a quick placeholder
-  if (App.coverCache[bookId]) {
-    thumbDiv.innerHTML = `<img src="${App.coverCache[bookId]}" alt="">`;
-  }
+  // Load actual page image from Dropbox (with path caching per book)
+  try {
+    if (!_bmThumbPathCache[bookId]) {
+      const meta = App.metadata.books[bookId] || {};
+      const images = await listImagesRecursive('books/' + bookId, meta.hiddenPaths);
+      _bmThumbPathCache[bookId] = images.map(e => e.path);
+    }
+    const paths = _bmThumbPathCache[bookId];
+    if (page >= paths.length) return;
+    const pagePath = paths[page];
+    const buf = await App.storage.loadBinary(pagePath);
+    const ext = pagePath.split('.').pop().toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    const blob = new Blob([buf], { type: mime });
+    const url = URL.createObjectURL(blob);
+    if (thumbDiv) thumbDiv.innerHTML = `<img src="${url}" alt="">`;
+  } catch (e) { /* silent — keep placeholder */ }
 }
 
 function showAddToBmListDropdown(anchor, bookId, page) {
@@ -3634,10 +3678,14 @@ async function openBmListReader(listName) {
   closeBmPanel();
 
   $('#reader-title').textContent = '📋 ' + listName;
-  // Hide bookmark btn and binding btn in bmList mode
+  // Hide bookmark btn in bmList mode (not relevant), but keep binding btn
   $('#reader-bookmark-btn').style.display = 'none';
-  $('#reader-binding-btn').style.display = 'none';
   $('#reader-bm-list-btn').style.display = 'none';
+  $('#reader-binding-btn').style.display = '';
+
+  // Set binding btn text for bmList
+  const bmRtl = App.bmListBinding === 'rtl';
+  $('#reader-binding-btn').textContent = bmRtl ? '右綴じ' : '左綴じ';
 
   showScreen('reader');
   history.pushState({ screen: 'reader', bmList: listName }, '', '#bmlist/' + encodeURIComponent(listName));
@@ -3649,7 +3697,7 @@ async function openBmListReader(listName) {
   slider.min = 0;
   slider.max = Math.max(0, pagePaths.length - 1);
   slider.value = 0;
-  slider.style.direction = 'ltr'; // bmList always LTR
+  slider.style.direction = App.bmListBinding === 'rtl' ? 'rtl' : 'ltr';
 
   await showBmListPage(0);
   bmListPrefetch(0);
