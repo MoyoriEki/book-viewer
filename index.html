@@ -148,13 +148,13 @@
   }
   .shelf-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 14px;
     max-width: 1200px;
     margin: 0 auto;
   }
   @media (min-width: 768px) {
-    .shelf-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; }
+    .shelf-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
   }
 
   /* Book card */
@@ -170,14 +170,14 @@
   .book-card:active { transform: scale(0.97); }
   .book-cover {
     width: 100%;
-    aspect-ratio: 7 / 10;
-    object-fit: cover;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
     display: block;
-    background: #222;
+    background: #181818;
   }
   .book-cover-placeholder {
     width: 100%;
-    aspect-ratio: 7 / 10;
+    aspect-ratio: 1 / 1;
     background: linear-gradient(135deg, #1a1a1a, #252525);
     display: flex;
     align-items: center;
@@ -1200,11 +1200,18 @@ function dlsiteDirName(workno) {
   return prefix + String(rounded).padStart(m[2].length, '0');
 }
 
-function fanzaUpscaleUrl(url) {
-  // 100x75 → 300x300 or larger available size
-  return url
-    .replace(/pl-\d+x\d+\./, 'pl-200x150.')
-    .replace(/-\d+x\d+\.jpg/, '-200x150.jpg');
+function fanzaImageCandidates(url) {
+  // 元URL例: https://doujin-assets.dmm.co.jp/digital/comic/d_254274/d_254274pl-100x75.jpg
+  // サイズなし版、大きいサイズ版、元URLの順で返す
+  const base = url.replace(/pl-\d+x\d+\.jpg/, '').replace(/pl\.jpg/, '');
+  const id = url.match(/(d_\d+)/)?.[1] || '';
+  return [
+    `${base}pl.jpg`,                    // サイズ指定なし（フルサイズ）
+    url.replace(/\d+x\d+/, '560x420'),  // 大サイズ
+    url.replace(/\d+x\d+/, '380x285'),  // 中サイズ
+    url.replace(/\d+x\d+/, '200x150'),  // 小サイズ
+    url,                                  // 元URL（最終フォールバック）
+  ];
 }
 
 async function tryLoadImage(url) {
@@ -1240,21 +1247,18 @@ async function loadCover(bookId, card) {
     }
   }
 
-  // Fanza作品: メタデータのimageSrcから読み込み（高解像度化）
+  // Fanza作品: メタデータのimageSrcから読み込み（複数サイズ試行）
   if (FANZA_ID_RE.test(bookId)) {
     const meta = App.metadata.books[bookId];
     if (meta && meta.imageSrc) {
-      const hiRes = fanzaUpscaleUrl(meta.imageSrc);
-      // まず高解像度版を試す
-      if (await tryLoadImage(hiRes)) {
-        App.coverCache[bookId] = hiRes;
-        setCoverImg(card, hiRes);
-        return;
+      const candidates = fanzaImageCandidates(meta.imageSrc);
+      for (const url of candidates) {
+        if (await tryLoadImage(url)) {
+          App.coverCache[bookId] = url;
+          setCoverImg(card, url);
+          return;
+        }
       }
-      // フォールバック: 元のURL
-      App.coverCache[bookId] = meta.imageSrc;
-      setCoverImg(card, meta.imageSrc);
-      return;
     }
   }
 
