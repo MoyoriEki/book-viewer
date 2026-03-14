@@ -677,6 +677,228 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
+  /* Bookmark indicator on current page */
+  .reader-bookmark-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 28px;
+    color: var(--accent);
+    z-index: 15;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: opacity 0.25s, transform 0.25s;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  }
+  .reader-bookmark-indicator.active { opacity: 1; transform: scale(1); }
+
+  /* Bookmark button in topbar */
+  .reader-bookmark-btn {
+    background: none;
+    border: 1px solid #444;
+    color: var(--text-muted);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .reader-bookmark-btn:hover { border-color: #666; color: var(--text); }
+  .reader-bookmark-btn.active { color: var(--accent); border-color: var(--accent); }
+
+  /* Bookmark list button in toolbar */
+  .reader-bm-list-btn {
+    background: none;
+    border: 1px solid #444;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    white-space: nowrap;
+    transition: all 0.15s;
+    align-self: flex-end;
+  }
+  .reader-bm-list-btn:hover { border-color: #666; color: var(--text); }
+  .reader-bm-list-btn .bm-count { color: var(--accent); margin-left: 4px; }
+
+  /* Bookmark dots on slider track */
+  .reader-slider-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .reader-slider-wrap .reader-slider { width: 100%; }
+  .reader-bm-dots {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .reader-bm-dot {
+    position: absolute;
+    top: 50%;
+    width: 4px;
+    height: 12px;
+    margin-top: -6px;
+    background: var(--accent);
+    border-radius: 2px;
+    opacity: 0.7;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .reader-bm-dot:hover { opacity: 1; height: 16px; margin-top: -8px; }
+
+  /* Bookmark list panel (overlay on reader) */
+  .bm-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 55vh;
+    background: rgba(20, 20, 20, 0.97);
+    border-top: 1px solid var(--border);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+    backdrop-filter: blur(12px);
+  }
+  .bm-panel.visible { transform: translateY(0); }
+
+  .bm-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .bm-panel-header h4 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .bm-panel-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .bm-panel-close:hover { color: var(--text); }
+
+  .bm-panel-list {
+    overflow-y: auto;
+    flex: 1;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+  }
+  .bm-panel-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .bm-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .bm-entry:hover { background: var(--bg-hover); }
+  .bm-entry:last-child { border-bottom: none; }
+  .bm-entry.current { background: var(--accent-dim); }
+
+  .bm-entry-thumb {
+    width: 40px;
+    height: 56px;
+    background: #111;
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .bm-entry-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .bm-entry-thumb-placeholder {
+    font-size: 9px;
+    color: #444;
+  }
+
+  .bm-entry-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .bm-entry-page {
+    font-size: 13px;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .bm-entry-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .bm-entry-time {
+    font-size: 10px;
+    color: #444;
+    margin-top: 1px;
+  }
+
+  .bm-entry-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .bm-entry-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .bm-entry-btn:hover { border-color: #444; color: var(--text); }
+  .bm-entry-btn.del:hover { color: var(--danger); border-color: var(--danger); }
+
+  /* Bookmark note edit inline */
+  .bm-note-input {
+    width: 100%;
+    padding: 4px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 11px;
+    font-family: inherit;
+    outline: none;
+    margin-top: 2px;
+  }
+  .bm-note-input:focus { border-color: var(--accent); }
+
   /* Folder browser modal */
   .folder-tree {
     max-height: 55vh;
@@ -808,12 +1030,14 @@
     <button class="reader-back-btn" id="reader-back">←</button>
     <div class="reader-book-title" id="reader-title"></div>
     <button class="reader-binding-btn" id="reader-binding-btn">右綴じ</button>
+    <button class="reader-bookmark-btn" id="reader-bookmark-btn" title="このページをブックマーク">🔖</button>
   </div>
   <div class="reader-canvas" id="reader-canvas">
     <div class="tap-zone tap-zone-left" id="tap-left"></div>
     <div class="tap-zone tap-zone-center" id="tap-center"></div>
     <div class="tap-zone tap-zone-right" id="tap-right"></div>
     <img id="reader-img" src="" alt="">
+    <div class="reader-bookmark-indicator" id="reader-bm-indicator">🔖</div>
     <div class="reader-loading" id="reader-loading" style="display:none;">
       <div class="spinner"></div>
     </div>
@@ -821,8 +1045,23 @@
   <div class="reader-toolbar" id="reader-toolbar">
     <div class="reader-slider-row">
       <span class="reader-page-label" id="reader-page-label">1 / 1</span>
-      <input type="range" class="reader-slider" id="reader-slider" min="0" max="0" value="0">
+      <div class="reader-slider-wrap" id="reader-slider-wrap">
+        <input type="range" class="reader-slider" id="reader-slider" min="0" max="0" value="0">
+        <div class="reader-bm-dots" id="reader-bm-dots"></div>
+      </div>
     </div>
+    <div style="display:flex;justify-content:flex-end;">
+      <button class="reader-bm-list-btn" id="reader-bm-list-btn">📋 ブックマーク<span class="bm-count" id="bm-count"></span></button>
+    </div>
+  </div>
+
+  <!-- Bookmark list panel -->
+  <div class="bm-panel" id="bm-panel">
+    <div class="bm-panel-header">
+      <h4>ブックマーク</h4>
+      <button class="bm-panel-close" id="bm-panel-close">✕</button>
+    </div>
+    <div class="bm-panel-list" id="bm-panel-list"></div>
   </div>
 </div>
 
@@ -946,6 +1185,11 @@ function init() {
   $('#tap-center').onclick = toggleToolbar;
   $('#reader-slider').oninput = onSliderChange;
   $('#reader-binding-btn').onclick = toggleBinding;
+
+  // Bookmark controls
+  $('#reader-bookmark-btn').onclick = toggleCurrentBookmark;
+  $('#reader-bm-list-btn').onclick = toggleBmPanel;
+  $('#bm-panel-close').onclick = () => closeBmPanel();
 
   // Keyboard
   document.addEventListener('keydown', onKeyDown);
@@ -2033,6 +2277,7 @@ async function openReader(bookId) {
   App.toolbarVisible = false;
   $('#reader-toolbar').classList.remove('visible');
   $('#reader-topbar').classList.remove('visible');
+  closeBmPanel();
 
   const meta = App.metadata.books[bookId] || {};
   $('#reader-title').textContent = meta.title || bookId;
@@ -2070,6 +2315,9 @@ async function openReader(bookId) {
 
     // Prefetch neighbors
     prefetch(startPage);
+
+    // Init bookmark UI
+    updateBookmarkUI();
   } catch (e) {
     console.error('Failed to open book:', e);
     toast('書籍を開けませんでした');
@@ -2091,6 +2339,7 @@ async function showPage(pageNum) {
     $('#reader-img').src = App.pageCache[pageNum];
     $('#reader-loading').style.display = 'none';
     saveProgress();
+    updateBookmarkUI();
     return;
   }
 
@@ -2116,6 +2365,7 @@ async function showPage(pageNum) {
   }
 
   saveProgress();
+  updateBookmarkUI();
 }
 
 function prefetch(centerPage) {
@@ -2164,6 +2414,8 @@ function updateBindingBtn() {
   // Flip slider direction
   const slider = $('#reader-slider');
   slider.style.direction = rtl ? 'rtl' : 'ltr';
+  // Re-render bookmark dots (positions depend on direction)
+  renderBmDots();
 }
 
 function toggleBinding() {
@@ -2221,6 +2473,8 @@ function closeReader(fromPopState) {
     saveMetadata();
   }
 
+  closeBmPanel();
+
   // Revoke page object URLs
   for (const url of Object.values(App.pageCache)) {
     URL.revokeObjectURL(url);
@@ -2252,6 +2506,8 @@ function onPopState(e) {
 // ============================================================
 function onKeyDown(e) {
   if ($('#reader-screen').style.display !== 'flex') return;
+  // Don't capture keys when editing bookmark note
+  if (e.target.classList.contains('bm-note-input')) return;
 
   const binding = getBinding();
   if (e.key === 'ArrowRight') {
@@ -2260,9 +2516,13 @@ function onKeyDown(e) {
   } else if (e.key === 'ArrowLeft') {
     e.preventDefault();
     binding === 'rtl' ? goNext() : goPrev();
+  } else if (e.key === 'b' || e.key === 'B') {
+    e.preventDefault();
+    toggleCurrentBookmark();
   } else if (e.key === 'Escape') {
     e.preventDefault();
-    if (App.toolbarVisible) toggleToolbar();
+    if ($('#bm-panel').classList.contains('visible')) closeBmPanel();
+    else if (App.toolbarVisible) toggleToolbar();
     else closeReader();
   }
 }
@@ -2312,6 +2572,223 @@ function setupScroll() {
     if (e.deltaY > 0) goNext();
     else if (e.deltaY < 0) goPrev();
   }, { passive: false });
+}
+
+// ============================================================
+// BOOKMARKS
+// ============================================================
+function getBookmarks(bookId) {
+  if (!App.metadata.bookmarks) App.metadata.bookmarks = {};
+  if (!App.metadata.bookmarks[bookId]) App.metadata.bookmarks[bookId] = [];
+  return App.metadata.bookmarks[bookId];
+}
+
+function isPageBookmarked(bookId, page) {
+  const bms = getBookmarks(bookId);
+  return bms.some(b => b.page === page);
+}
+
+function toggleCurrentBookmark() {
+  if (!App.currentBook) return;
+  const bookId = App.currentBook;
+  const page = App.currentPage;
+  const bms = getBookmarks(bookId);
+  const idx = bms.findIndex(b => b.page === page);
+
+  if (idx >= 0) {
+    bms.splice(idx, 1);
+    toast(`ブックマーク削除: ${page + 1}ページ`);
+  } else {
+    bms.push({ page, note: '', created: new Date().toISOString() });
+    bms.sort((a, b) => a.page - b.page);
+    toast(`ブックマーク追加: ${page + 1}ページ`);
+  }
+
+  debouncedSave();
+  updateBookmarkUI();
+  if ($('#bm-panel').classList.contains('visible')) renderBmPanel();
+}
+
+function updateBookmarkUI() {
+  if (!App.currentBook) return;
+  const bookId = App.currentBook;
+  const page = App.currentPage;
+  const marked = isPageBookmarked(bookId, page);
+  const bms = getBookmarks(bookId);
+
+  // Bookmark button state
+  const btn = $('#reader-bookmark-btn');
+  btn.classList.toggle('active', marked);
+
+  // Bookmark indicator on page
+  $('#reader-bm-indicator').classList.toggle('active', marked);
+
+  // Bookmark count
+  const countEl = $('#bm-count');
+  countEl.textContent = bms.length > 0 ? bms.length : '';
+
+  // Bookmark dots on slider
+  renderBmDots();
+}
+
+function renderBmDots() {
+  const container = $('#reader-bm-dots');
+  container.innerHTML = '';
+  if (!App.currentBook || App.totalPages <= 1) return;
+
+  const bms = getBookmarks(App.currentBook);
+  if (bms.length === 0) return;
+
+  const slider = $('#reader-slider');
+  const binding = getBinding();
+
+  for (const bm of bms) {
+    const dot = document.createElement('div');
+    dot.className = 'reader-bm-dot';
+    const ratio = bm.page / (App.totalPages - 1);
+    // RTL: slider direction is reversed, so invert position
+    const pct = binding === 'rtl' ? (1 - ratio) * 100 : ratio * 100;
+    dot.style.left = `calc(${pct}% - 2px)`;
+    dot.title = `${bm.page + 1}ページ${bm.note ? ': ' + bm.note : ''}`;
+    dot.onclick = (e) => {
+      e.stopPropagation();
+      showPage(bm.page);
+      prefetch(bm.page);
+    };
+    container.appendChild(dot);
+  }
+}
+
+function toggleBmPanel() {
+  const panel = $('#bm-panel');
+  if (panel.classList.contains('visible')) {
+    closeBmPanel();
+  } else {
+    openBmPanel();
+  }
+}
+
+function openBmPanel() {
+  renderBmPanel();
+  $('#bm-panel').classList.add('visible');
+}
+
+function closeBmPanel() {
+  $('#bm-panel').classList.remove('visible');
+}
+
+function renderBmPanel() {
+  const list = $('#bm-panel-list');
+  if (!App.currentBook) { list.innerHTML = ''; return; }
+
+  const bookId = App.currentBook;
+  const bms = getBookmarks(bookId);
+
+  if (bms.length === 0) {
+    list.innerHTML = '<div class="bm-panel-empty">🔖 ブックマークはありません<br><span style="font-size:11px;color:#555;margin-top:4px;display:inline-block;">ツールバーの 🔖 ボタンで追加</span></div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  for (const bm of bms) {
+    const isCurrent = bm.page === App.currentPage;
+    const entry = document.createElement('div');
+    entry.className = 'bm-entry' + (isCurrent ? ' current' : '');
+
+    // Thumbnail (use cache if available)
+    let thumbHtml = '<div class="bm-entry-thumb"><span class="bm-entry-thumb-placeholder">p.' + (bm.page + 1) + '</span></div>';
+    if (App.pageCache[bm.page]) {
+      thumbHtml = `<div class="bm-entry-thumb"><img src="${App.pageCache[bm.page]}" alt=""></div>`;
+    }
+
+    const timeStr = bm.created ? new Date(bm.created).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+    entry.innerHTML = `
+      ${thumbHtml}
+      <div class="bm-entry-info">
+        <div class="bm-entry-page">${bm.page + 1} / ${App.totalPages} ページ</div>
+        ${bm.note ? `<div class="bm-entry-note">${bm.note}</div>` : '<div class="bm-entry-note" style="color:#555;font-style:italic;">メモなし</div>'}
+        <div class="bm-entry-time">${timeStr}</div>
+      </div>
+      <div class="bm-entry-actions">
+        <button class="bm-entry-btn memo-btn" title="メモ編集">✏️</button>
+        <button class="bm-entry-btn del" title="削除">✕</button>
+      </div>
+    `;
+
+    // Jump to page on click
+    entry.addEventListener('click', (e) => {
+      if (e.target.closest('.bm-entry-btn') || e.target.closest('.bm-note-input')) return;
+      showPage(bm.page);
+      prefetch(bm.page);
+      closeBmPanel();
+    });
+
+    // Memo edit button
+    entry.querySelector('.memo-btn').onclick = (e) => {
+      e.stopPropagation();
+      const infoDiv = entry.querySelector('.bm-entry-info');
+      const existingInput = infoDiv.querySelector('.bm-note-input');
+      if (existingInput) { existingInput.focus(); return; }
+
+      const noteDiv = infoDiv.querySelector('.bm-entry-note');
+      const input = document.createElement('input');
+      input.className = 'bm-note-input';
+      input.value = bm.note || '';
+      input.placeholder = 'メモを入力...';
+      input.maxLength = 100;
+      noteDiv.replaceWith(input);
+      input.focus();
+
+      const save = () => {
+        bm.note = input.value.trim();
+        debouncedSave();
+        renderBmPanel();
+        updateBookmarkUI();
+      };
+      input.onblur = save;
+      input.onkeydown = (ke) => {
+        if (ke.key === 'Enter') { ke.preventDefault(); save(); }
+        if (ke.key === 'Escape') { ke.preventDefault(); renderBmPanel(); }
+        ke.stopPropagation();  // prevent reader keyboard nav
+      };
+    };
+
+    // Delete button
+    entry.querySelector('.del').onclick = (e) => {
+      e.stopPropagation();
+      const idx = bms.findIndex(b => b.page === bm.page);
+      if (idx >= 0) {
+        bms.splice(idx, 1);
+        toast(`ブックマーク削除: ${bm.page + 1}ページ`);
+        debouncedSave();
+        updateBookmarkUI();
+        renderBmPanel();
+      }
+    };
+
+    list.appendChild(entry);
+
+    // Async load thumbnail if not cached
+    if (!App.pageCache[bm.page]) {
+      loadBmThumb(bm.page, entry);
+    }
+  }
+}
+
+async function loadBmThumb(page, entry) {
+  if (!App.currentBook || page < 0 || page >= App.totalPages) return;
+  try {
+    const pagePath = App.pagePaths[page];
+    const buf = await App.storage.loadBinary(pagePath);
+    const ext = pagePath.split('.').pop().toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    const blob = new Blob([buf], { type: mime });
+    const url = URL.createObjectURL(blob);
+    App.pageCache[page] = url;
+    const thumbDiv = entry.querySelector('.bm-entry-thumb');
+    if (thumbDiv) thumbDiv.innerHTML = `<img src="${url}" alt="">`;
+  } catch (e) { /* silent */ }
 }
 
 // ============================================================
