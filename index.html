@@ -399,6 +399,29 @@
   .ctx-item.danger { color: var(--danger); }
   .ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
+  /* Import progress bar (top of shelf) */
+  .import-bar {
+    height: 3px;
+    background: var(--border);
+    flex-shrink: 0;
+    display: none;
+  }
+  .import-bar.active { display: block; }
+  .import-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s;
+    width: 0%;
+  }
+  .import-status {
+    font-size: 10px;
+    color: #555;
+    padding: 2px 20px;
+    flex-shrink: 0;
+    display: none;
+  }
+  .import-status.active { display: block; }
+
   /* ============================================
      READER SCREEN
      ============================================ */
@@ -772,6 +795,8 @@
     </div>
     <span class="shelf-book-count" id="shelf-book-count"></span>
   </div>
+  <div class="import-bar" id="import-bar"><div class="import-bar-fill" id="import-bar-fill"></div></div>
+  <div class="import-status" id="import-status-text"></div>
   <div class="shelf-grid-wrap">
     <div class="shelf-grid" id="shelf-grid"></div>
   </div>
@@ -844,6 +869,13 @@
   <div class="modal-box" style="width: 480px;">
     <h3>設定</h3>
     <div style="margin-top:12px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">リスト出力</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="modal-btn" id="btn-export-fav" style="font-size:11px;">ふぁぼ</button>
+        <span id="export-list-btns"></span>
+      </div>
+    </div>
+    <div style="margin-top:8px;">
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">非表示の作品 <span id="hidden-count" style="color:#555;"></span></div>
       <div class="hidden-list" id="hidden-list"></div>
     </div>
@@ -1717,7 +1749,65 @@ function openSettingsModal() {
     }
   }
 
+  // エクスポートボタン
+  $('#btn-export-fav').onclick = () => exportList('ふぁぼ');
+  const extraBtns = $('#export-list-btns');
+  extraBtns.innerHTML = '';
+  for (const name of Object.keys(App.metadata.lists).filter(k => k !== 'ふぁぼ')) {
+    const btn = document.createElement('button');
+    btn.className = 'modal-btn';
+    btn.style.fontSize = '11px';
+    btn.textContent = name;
+    btn.onclick = () => exportList(name);
+    extraBtns.appendChild(btn);
+  }
+
   showModal('modal-settings');
+}
+
+function exportList(listName) {
+  const books = Object.entries(App.metadata.books)
+    .filter(([id, meta]) => meta.lists && meta.lists.includes(listName));
+
+  if (books.length === 0) {
+    toast(`「${listName}」は空です`);
+    return;
+  }
+
+  // カスタム順があればそれに従う
+  const listData = App.metadata.lists[listName];
+  const order = (listData && listData.order) || [];
+  if (order.length > 0) {
+    books.sort((a, b) => {
+      const ia = order.indexOf(a[0]);
+      const ib = order.indexOf(b[0]);
+      return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib);
+    });
+  }
+
+  let text = `# ${listName}（${books.length}作品）\n`;
+  text += `# 出力日: ${new Date().toLocaleDateString('ja-JP')}\n\n`;
+
+  for (const [id, meta] of books) {
+    const title = meta.title || id;
+    const maker = meta.makerName || '';
+    const store = meta.store || '';
+    const url = getStoreUrl(id) || '';
+    text += `${title}\n`;
+    if (maker) text += `  サークル: ${maker}\n`;
+    if (store) text += `  ストア: ${store}\n`;
+    if (url) text += `  ${url}\n`;
+    text += `\n`;
+  }
+
+  // ダウンロード
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${listName}_${new Date().toISOString().slice(0, 10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`「${listName}」をエクスポートしました`);
 }
 
 // ============================================================
@@ -2232,60 +2322,76 @@ async function onZipSelected(e) {
   if (files.length === 0) return;
   e.target.value = '';
 
+  const bar = $('#import-bar');
+  const fill = $('#import-bar-fill');
+  const statusText = $('#import-status-text');
+
+  bar.classList.add('active');
+  statusText.classList.add('active');
+  fill.style.width = '0%';
+
   toast(`${files.length}件のZIPをインポート中...`);
 
-  // バックグラウンドで処理（UIはブロックしない）
+  // バックグラウンドで処理
   (async () => {
     let totalUploaded = 0;
+    let totalImages = 0;
 
+    // まず全ZIPの画像数を数える
+    const zipData = [];
     for (const file of files) {
-      let folderName = file.name.replace(/\.zip$/i, '');
-
       try {
         const buf = await file.arrayBuffer();
         const zip = await JSZip.loadAsync(buf);
-
         const entries = [];
-        zip.forEach((relativePath, zipEntry) => {
-          if (!zipEntry.dir) entries.push({ path: relativePath, entry: zipEntry });
-        });
-
-        const imgEntries = entries.filter(e => IMG_RE.test(e.path));
-        if (imgEntries.length === 0) {
+        zip.forEach((path, entry) => { if (!entry.dir) entries.push({ path, entry }); });
+        const imgs = entries.filter(e => IMG_RE.test(e.path));
+        if (imgs.length > 0) {
+          zipData.push({ name: file.name, folderName: file.name.replace(/\.zip$/i, ''), imgs, zip });
+          totalImages += imgs.length;
+        } else {
           toast(`${file.name}: 画像なし`);
-          continue;
         }
+      } catch (err) {
+        toast(`${file.name}: 読み込み失敗`);
+      }
+    }
 
-        toast(`${folderName}: ${imgEntries.length}枚アップロード中...`);
-        const bookPath = 'books/' + folderName;
+    for (const { name, folderName, imgs } of zipData) {
+      statusText.textContent = `${folderName}: 0/${imgs.length}枚`;
+      const bookPath = 'books/' + folderName;
 
-        for (let i = 0; i < imgEntries.length; i++) {
-          const { path: entryPath, entry } = imgEntries[i];
+      try {
+        for (let i = 0; i < imgs.length; i++) {
+          const { path: entryPath, entry } = imgs[i];
           const data = await entry.async('arraybuffer');
           await App.storage.save(bookPath + '/' + entryPath, data);
           totalUploaded++;
+          const pct = Math.round((totalUploaded / totalImages) * 100);
+          fill.style.width = pct + '%';
+          statusText.textContent = `${folderName}: ${i + 1}/${imgs.length}枚`;
         }
 
         if (!App.metadata.books[folderName]) {
           App.metadata.books[folderName] = {
             title: folderName, store: '', purchaseDate: '', tags: [],
             lists: [], coverImage: '', lastReadPage: 0,
-            bindingDirection: 'rtl', totalPages: imgEntries.length, hiddenPaths: [],
+            bindingDirection: 'rtl', totalPages: imgs.length, hiddenPaths: [],
           };
         } else {
-          App.metadata.books[folderName].totalPages = imgEntries.length;
+          App.metadata.books[folderName].totalPages = imgs.length;
         }
-
-        toast(`${folderName}: 完了（${imgEntries.length}枚）`);
       } catch (err) {
         console.error('ZIP import error:', err);
-        toast(`${file.name}: 失敗`);
+        toast(`${name}: 失敗`);
       }
     }
 
     await saveMetadata();
-    await loadShelf();
+    bar.classList.remove('active');
+    statusText.classList.remove('active');
     toast(`インポート完了: ${totalUploaded}ファイル`);
+    await loadShelf();
   })();
 }
 
