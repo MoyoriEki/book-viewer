@@ -172,6 +172,10 @@
   }
   .book-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
   .book-card:active { transform: scale(0.97); }
+
+  /* Drag reorder */
+  .book-card.dragging { opacity: 0.3; }
+  .book-card.drag-over { box-shadow: 0 0 0 2px var(--accent); }
   .book-cover-wrap {
     position: relative;
     width: 100%;
@@ -737,7 +741,7 @@
   <div class="shelf-topbar">
     <h1>BookViewer</h1>
     <div class="shelf-topbar-actions">
-      <button class="btn-icon" id="btn-import" title="ZIPインポート">↑</button>
+      <button class="btn-icon" id="btn-import" title="ZIPインポート" style="font-size:12px;font-weight:500;">ZIP</button>
       <button class="btn-icon" id="btn-new-list" title="新しいリスト">＋</button>
       <button class="btn-icon" id="btn-refresh" title="再読み込み">↻</button>
       <button class="btn-icon" id="btn-settings" title="設定" style="font-size:14px;">⚙</button>
@@ -758,9 +762,12 @@
       <select class="shelf-sort-select" id="shelf-sort">
         <option value="purchase_desc">購入日 新→古</option>
         <option value="purchase_asc">購入日 古→新</option>
+        <option value="lastread_desc">最近読んだ順</option>
+        <option value="maker_asc">サークル名 A→Z</option>
         <option value="title_asc">タイトル A→Z</option>
         <option value="title_desc">タイトル Z→A</option>
         <option value="progress_desc">進捗 多→少</option>
+        <option value="custom">カスタム（ドラッグ並替）</option>
       </select>
     </div>
     <span class="shelf-book-count" id="shelf-book-count"></span>
@@ -1161,6 +1168,10 @@ function getFilteredBooks() {
         return (mb.purchaseDate || '').localeCompare(ma.purchaseDate || '');
       case 'purchase_asc':
         return (ma.purchaseDate || '').localeCompare(mb.purchaseDate || '');
+      case 'lastread_desc':
+        return (mb.lastReadTime || '').localeCompare(ma.lastReadTime || '');
+      case 'maker_asc':
+        return (ma.makerName || '').localeCompare(mb.makerName || '', 'ja');
       case 'title_asc':
         return (ma.title || a.id).localeCompare(mb.title || b.id, 'ja');
       case 'title_desc':
@@ -1169,6 +1180,13 @@ function getFilteredBooks() {
         const pa = ma.totalPages > 0 ? (ma.lastReadPage || 0) / ma.totalPages : -1;
         const pb = mb.totalPages > 0 ? (mb.lastReadPage || 0) / mb.totalPages : -1;
         return pb - pa;
+      }
+      case 'custom': {
+        const list = App.metadata.lists[App.currentList];
+        const order = (list && list.order) || [];
+        const ia = order.indexOf(a.id);
+        const ib = order.indexOf(b.id);
+        return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib);
       }
       default:
         return 0;
@@ -1267,6 +1285,127 @@ function renderGrid() {
 
     grid.appendChild(card);
   }
+
+  // Drag reorder (カスタムソート + ユーザーリスト時のみ)
+  if (App.currentSort === 'custom' && App.currentList !== 'すべて' && App.currentList !== 'DL済み') {
+    setupDragReorder(grid, books);
+  }
+}
+
+// ============================================================
+// DRAG REORDER
+// ============================================================
+function setupDragReorder(grid, books) {
+  let dragId = null;
+
+  grid.querySelectorAll('.book-card').forEach((card, idx) => {
+    card.draggable = true;
+    card.style.cursor = 'grab';
+    card.dataset.dragIdx = idx;
+
+    card.addEventListener('dragstart', (e) => {
+      dragId = books[idx].id;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('drag-over');
+    });
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      const dropId = books[idx].id;
+      if (dragId && dragId !== dropId) {
+        reorderList(App.currentList, dragId, dropId, books);
+      }
+    });
+  });
+
+  // Touch drag support
+  let touchDragEl = null;
+  let touchDragId = null;
+  let touchClone = null;
+
+  grid.addEventListener('touchstart', (e) => {
+    if (App.currentSort !== 'custom') return;
+    const card = e.target.closest('.book-card');
+    if (!card) return;
+    const idx = parseInt(card.dataset.dragIdx);
+    if (isNaN(idx)) return;
+
+    // 長押しでドラッグ開始
+    const startY = e.touches[0].clientY;
+    const startX = e.touches[0].clientX;
+    const timer = setTimeout(() => {
+      touchDragEl = card;
+      touchDragId = books[idx].id;
+      card.classList.add('dragging');
+
+      touchClone = card.cloneNode(true);
+      touchClone.style.cssText = `position:fixed;pointer-events:none;z-index:9999;opacity:0.8;width:${card.offsetWidth}px;top:${startY - 30}px;left:${startX - card.offsetWidth/2}px;`;
+      document.body.appendChild(touchClone);
+    }, 400);
+
+    const cancel = () => { clearTimeout(timer); };
+    card.addEventListener('touchend', cancel, { once: true });
+    card.addEventListener('touchmove', (me) => {
+      if (!touchDragEl) { cancel(); return; }
+      me.preventDefault();
+      const ty = me.touches[0].clientY;
+      const tx = me.touches[0].clientX;
+      if (touchClone) {
+        touchClone.style.top = (ty - 30) + 'px';
+        touchClone.style.left = (tx - touchClone.offsetWidth/2) + 'px';
+      }
+      // Highlight drop target
+      grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+      const el = document.elementFromPoint(tx, ty);
+      const target = el && el.closest('.book-card');
+      if (target && target !== touchDragEl) target.classList.add('drag-over');
+    }, { passive: false });
+  }, { passive: true });
+
+  grid.addEventListener('touchend', (e) => {
+    if (!touchDragEl) return;
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const target = el && el.closest('.book-card');
+    if (target && target !== touchDragEl) {
+      const dropIdx = parseInt(target.dataset.dragIdx);
+      if (!isNaN(dropIdx)) {
+        reorderList(App.currentList, touchDragId, books[dropIdx].id, books);
+      }
+    }
+    touchDragEl.classList.remove('dragging');
+    grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+    if (touchClone) { touchClone.remove(); touchClone = null; }
+    touchDragEl = null;
+    touchDragId = null;
+  });
+}
+
+function reorderList(listName, dragId, dropId, books) {
+  const list = App.metadata.lists[listName];
+  if (!list) return;
+  // 現在の表示順をベースにorder配列を作成
+  const order = books.map(b => b.id);
+  const fromIdx = order.indexOf(dragId);
+  const toIdx = order.indexOf(dropId);
+  if (fromIdx === -1 || toIdx === -1) return;
+  order.splice(fromIdx, 1);
+  order.splice(toIdx, 0, dragId);
+  list.order = order;
+  debouncedSave();
+  renderGrid();
 }
 
 const DLSITE_ID_RE = /^[RBV]J\d{6,}$/;
@@ -1589,8 +1728,8 @@ function showCtxMenu(x, y, bookId) {
     html += `<div class="ctx-item" data-action="${inList ? 'removelist' : 'addlist'}" data-list="${listName}">${inList ? '✓ ' : ''}${listName}</div>`;
   }
 
-  // Remove from current list (if viewing a list)
-  if (App.currentList !== 'すべて') {
+  // Remove from current list (if viewing a user list)
+  if (App.currentList !== 'すべて' && App.currentList !== 'DL済み') {
     html += `<div class="ctx-item danger" data-action="removecurrent">このリストから削除</div>`;
   }
 
@@ -1903,6 +2042,7 @@ async function prefetchPage(pageNum) {
 function saveProgress() {
   if (!App.currentBook || !App.metadata.books[App.currentBook]) return;
   App.metadata.books[App.currentBook].lastReadPage = App.currentPage;
+  App.metadata.books[App.currentBook].lastReadTime = new Date().toISOString();
   debouncedSave();
 }
 
@@ -1976,6 +2116,7 @@ function closeReader(fromPopState) {
   // Save progress immediately
   if (App.currentBook && App.metadata.books[App.currentBook]) {
     App.metadata.books[App.currentBook].lastReadPage = App.currentPage;
+    App.metadata.books[App.currentBook].lastReadTime = new Date().toISOString();
     saveMetadata();
   }
 
