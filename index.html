@@ -388,6 +388,7 @@
   }
   .ctx-item:hover { background: var(--bg-hover); }
   .ctx-item.danger { color: var(--danger); }
+  .ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
   /* ============================================
      READER SCREEN
@@ -1217,7 +1218,12 @@ function renderGrid() {
     card.addEventListener('click', (e) => {
       if (e.target.closest('.book-star')) return;
       if (book.metadataOnly) {
-        toast('未ダウンロード（Dropboxにフォルダがありません）');
+        const url = getStoreUrl(book.id);
+        if (url) {
+          window.open(url, '_blank');
+        } else {
+          toast('未ダウンロード（Dropboxにフォルダがありません）');
+        }
         return;
       }
       openReader(book.id);
@@ -1252,6 +1258,26 @@ function renderGrid() {
 
 const DLSITE_ID_RE = /^[RBV]J\d{6,}$/;
 const FANZA_ID_RE = /^d_\d+$/;
+
+function getStoreUrl(bookId) {
+  if (DLSITE_ID_RE.test(bookId)) {
+    return `https://www.dlsite.com/maniax/work/=/product_id/${bookId}.html`;
+  }
+  if (FANZA_ID_RE.test(bookId)) {
+    return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${bookId}/`;
+  }
+  return null;
+}
+
+function getPlayUrl(bookId) {
+  if (DLSITE_ID_RE.test(bookId)) {
+    return `https://play.dlsite.com/work/${bookId}`;
+  }
+  if (FANZA_ID_RE.test(bookId)) {
+    return `https://www.dmm.co.jp/dc/doujin/-/mylibrary/detail/=/product_id=${bookId}/`;
+  }
+  return null;
+}
 
 function dlsiteDirName(workno) {
   const m = workno.match(/^([A-Z]+)(\d+)$/);
@@ -1549,6 +1575,15 @@ function showCtxMenu(x, y, bookId) {
   html += `<div class="ctx-item" data-action="folder">フォルダ</div>`;
   html += `<div class="ctx-item" data-action="hide" style="color:#888;">非表示</div>`;
 
+  // Store links
+  const storeUrl = getStoreUrl(bookId);
+  const playUrl = getPlayUrl(bookId);
+  if (storeUrl || playUrl) {
+    html += `<div class="ctx-divider"></div>`;
+    if (storeUrl) html += `<div class="ctx-item" data-action="store">作品ページ ↗</div>`;
+    if (playUrl) html += `<div class="ctx-item" data-action="play">DL/閲覧ページ ↗</div>`;
+  }
+
   menu.innerHTML = html;
 
   // Position
@@ -1570,6 +1605,8 @@ function showCtxMenu(x, y, bookId) {
       else if (action === 'removecurrent') removeFromList(bookId, App.currentList);
       else if (action === 'folder') openFolderBrowser(bookId);
       else if (action === 'hide') hideBook(bookId);
+      else if (action === 'store') { const u = getStoreUrl(bookId); if (u) window.open(u, '_blank'); }
+      else if (action === 'play') { const u = getPlayUrl(bookId); if (u) window.open(u, '_blank'); }
       hideCtxMenu();
     };
   });
