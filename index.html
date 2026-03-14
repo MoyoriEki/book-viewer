@@ -899,6 +899,278 @@
   }
   .bm-note-input:focus { border-color: var(--accent); }
 
+  /* ============================================
+     BOOKMARK BROWSER MODAL (shelf-level)
+     ============================================ */
+  .bm-browser {
+    display: flex;
+    flex-direction: column;
+    max-height: 70vh;
+  }
+  .bm-browser-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .bm-browser-tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .bm-browser-tab:hover { color: var(--text); }
+  .bm-browser-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .bm-browser-body {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+    min-height: 200px;
+  }
+
+  /* All bookmarks list */
+  .bm-all-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .bm-all-entry:last-child { border-bottom: none; }
+  .bm-all-entry:hover { background: var(--bg-hover); }
+  .bm-all-book {
+    font-size: 10px;
+    color: #555;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 1px;
+  }
+  .bm-all-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .bm-all-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .bm-all-btn:hover { border-color: #444; color: var(--text); }
+  .bm-all-btn.del:hover { color: var(--danger); border-color: var(--danger); }
+  .bm-all-btn.accent { color: var(--accent); }
+  .bm-all-btn.accent:hover { border-color: var(--accent); }
+
+  /* BM Lists section */
+  .bmlist-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .bmlist-new-input {
+    flex: 1;
+    padding: 6px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+  }
+  .bmlist-new-input:focus { border-color: var(--accent); }
+  .bmlist-new-btn {
+    background: var(--accent);
+    color: #111;
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .bmlist-new-btn:hover { opacity: 0.85; }
+
+  .bmlist-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .bmlist-card:hover { background: var(--bg-hover); }
+  .bmlist-card-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+    width: 40px;
+    text-align: center;
+  }
+  .bmlist-card-info { flex: 1; min-width: 0; }
+  .bmlist-card-name {
+    font-size: 14px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bmlist-card-count {
+    font-size: 11px;
+    color: #555;
+    margin-top: 2px;
+  }
+  .bmlist-card-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  /* BM List detail view (inside modal) */
+  .bmlist-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .bmlist-detail-back {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .bmlist-detail-back:hover { color: var(--text); }
+  .bmlist-detail-title {
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bmlist-detail-read {
+    background: var(--accent);
+    color: #111;
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .bmlist-detail-read:hover { opacity: 0.85; }
+  .bmlist-detail-read:disabled { opacity: 0.4; cursor: default; }
+
+  /* Draggable items in bmlist detail */
+  .bmlist-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .bmlist-item:last-child { border-bottom: none; }
+  .bmlist-item:hover { background: var(--bg-hover); }
+  .bmlist-item.dragging { opacity: 0.3; }
+  .bmlist-item.drag-over { box-shadow: inset 0 -2px 0 var(--accent); }
+  .bmlist-drag-handle {
+    cursor: grab;
+    color: #444;
+    font-size: 14px;
+    flex-shrink: 0;
+    padding: 4px;
+    user-select: none;
+    touch-action: none;
+  }
+  .bmlist-drag-handle:active { cursor: grabbing; }
+  .bmlist-item-thumb {
+    width: 36px;
+    height: 50px;
+    background: #111;
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .bmlist-item-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .bmlist-item-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .bmlist-item-book {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bmlist-item-page {
+    font-size: 10px;
+    color: #555;
+    margin-top: 1px;
+  }
+  .bmlist-item-note {
+    font-size: 10px;
+    color: #444;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 1px;
+    font-style: italic;
+  }
+
+  /* Add-to-bmlist dropdown */
+  .bm-add-dropdown {
+    position: absolute;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px 0;
+    min-width: 160px;
+    z-index: 1001;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .bm-add-dropdown-item {
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text);
+    transition: background 0.1s;
+  }
+  .bm-add-dropdown-item:hover { background: var(--bg-hover); }
+  .bm-add-dropdown-item.in-list { color: var(--accent); }
+
   /* Folder browser modal */
   .folder-tree {
     max-height: 55vh;
@@ -987,6 +1259,7 @@
     <h1>BookViewer</h1>
     <div class="shelf-topbar-actions">
       <button class="btn-icon" id="btn-import" title="ZIPインポート" style="font-size:12px;font-weight:500;">ZIP</button>
+      <button class="btn-icon" id="btn-bm-browser" title="ブックマーク" style="font-size:15px;">🔖</button>
       <button class="btn-icon" id="btn-new-list" title="新しいリスト">＋</button>
       <button class="btn-icon" id="btn-refresh" title="再読み込み">↻</button>
       <button class="btn-icon" id="btn-settings" title="設定" style="font-size:14px;">⚙</button>
@@ -1124,6 +1397,25 @@
   </div>
 </div>
 
+<!-- ========== BOOKMARK BROWSER MODAL ========== -->
+<div class="modal-overlay" id="modal-bm-browser">
+  <div class="modal-box" style="width: 520px; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
+    <div style="padding: 16px 20px 0; flex-shrink: 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <h3 style="margin:0;">🔖 ブックマーク</h3>
+        <button class="bm-panel-close" id="bm-browser-close">✕</button>
+      </div>
+    </div>
+    <div class="bm-browser">
+      <div class="bm-browser-tabs" id="bm-browser-tabs">
+        <button class="bm-browser-tab active" data-tab="all">すべて</button>
+        <button class="bm-browser-tab" data-tab="lists">マイリスト</button>
+      </div>
+      <div class="bm-browser-body" id="bm-browser-body"></div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // APP STATE
@@ -1137,11 +1429,15 @@ const App = {
   currentBook: null,
   currentPage: 0,
   totalPages: 0,
-  pageCache: {},     // { bookId: { pageNum: objectURL } }
+  pageCache: {},     // { pageNum: objectURL }
   toolbarVisible: false,
   bookFolders: [],   // raw folder list from storage
   coverCache: {},    // { bookId: objectURL }
   saving: false,
+  bmListMode: null,  // name of bmList being read, or null
+  bmListItems: [],   // resolved items when reading a bmList: [{ bookId, page, path }]
+  bmBrowserTab: 'all',
+  bmBrowserDetail: null, // name of bmList being viewed in detail, or null
 };
 
 // ============================================================
@@ -1217,6 +1513,21 @@ function init() {
 
   // Settings modal
   $('#btn-settings').onclick = () => openSettingsModal();
+
+  // Bookmark browser
+  $('#btn-bm-browser').onclick = () => openBmBrowser();
+  $('#bm-browser-close').onclick = () => hideModal('modal-bm-browser');
+  $('#modal-bm-browser').addEventListener('click', (e) => {
+    if (e.target === $('#modal-bm-browser')) hideModal('modal-bm-browser');
+  });
+  $('#bm-browser-tabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.bm-browser-tab');
+    if (!tab) return;
+    App.bmBrowserTab = tab.dataset.tab;
+    App.bmBrowserDetail = null;
+    $$('.bm-browser-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === App.bmBrowserTab));
+    renderBmBrowser();
+  });
 
   // ZIP import
   $('#btn-import').onclick = () => $('#zip-input').click();
@@ -1324,6 +1635,7 @@ async function loadMetadata() {
   if (!App.metadata.lists) App.metadata.lists = { 'ふぁぼ': { type: 'default', created: new Date().toISOString().slice(0, 10) } };
   if (!App.metadata.bookmarks) App.metadata.bookmarks = {};
   if (!App.metadata.hiddenBooks) App.metadata.hiddenBooks = [];
+  if (!App.metadata.bmLists) App.metadata.bmLists = {};
   if (!App.metadata.lists['ふぁぼ']) App.metadata.lists['ふぁぼ'] = { type: 'default', created: new Date().toISOString().slice(0, 10) };
 }
 
@@ -2275,9 +2587,16 @@ async function openReader(bookId) {
   App.currentBook = bookId;
   App.pageCache = {};
   App.toolbarVisible = false;
+  App.bmListMode = null;
+  App.bmListItems = [];
   $('#reader-toolbar').classList.remove('visible');
   $('#reader-topbar').classList.remove('visible');
   closeBmPanel();
+
+  // Restore buttons hidden in bmList mode
+  $('#reader-bookmark-btn').style.display = '';
+  $('#reader-binding-btn').style.display = '';
+  $('#reader-bm-list-btn').style.display = '';
 
   const meta = App.metadata.books[bookId] || {};
   $('#reader-title').textContent = meta.title || bookId;
@@ -2428,22 +2747,30 @@ function toggleBinding() {
 
 function goNext() {
   if (App.currentPage < App.totalPages - 1) {
-    showPage(App.currentPage + 1);
-    prefetch(App.currentPage + 1);
+    if (App.bmListMode) {
+      showBmListPage(App.currentPage + 1);
+      bmListPrefetch(App.currentPage + 1);
+    } else {
+      showPage(App.currentPage + 1);
+      prefetch(App.currentPage + 1);
+    }
   }
 }
 
 function goPrev() {
   if (App.currentPage > 0) {
-    showPage(App.currentPage - 1);
-    prefetch(App.currentPage - 1);
+    if (App.bmListMode) {
+      showBmListPage(App.currentPage - 1);
+      bmListPrefetch(App.currentPage - 1);
+    } else {
+      showPage(App.currentPage - 1);
+      prefetch(App.currentPage - 1);
+    }
   }
 }
 
 function tapNav(side) {
-  const binding = getBinding();
-  // RTL: right tap = prev page, left tap = next page
-  // LTR: right tap = next page, left tap = prev page
+  const binding = App.bmListMode ? 'ltr' : getBinding();
   if (binding === 'rtl') {
     if (side === 'right') goPrev();
     else goNext();
@@ -2461,19 +2788,33 @@ function toggleToolbar() {
 
 function onSliderChange() {
   const page = parseInt($('#reader-slider').value);
-  showPage(page);
-  prefetch(page);
+  if (App.bmListMode) {
+    showBmListPage(page);
+    bmListPrefetch(page);
+  } else {
+    showPage(page);
+    prefetch(page);
+  }
 }
 
 function closeReader(fromPopState) {
-  // Save progress immediately
-  if (App.currentBook && App.metadata.books[App.currentBook]) {
+  // Save progress immediately (only for normal books, not bmList)
+  if (!App.bmListMode && App.currentBook && App.metadata.books[App.currentBook]) {
     App.metadata.books[App.currentBook].lastReadPage = App.currentPage;
     App.metadata.books[App.currentBook].lastReadTime = new Date().toISOString();
     saveMetadata();
   }
 
   closeBmPanel();
+
+  // Reset bmList mode
+  App.bmListMode = null;
+  App.bmListItems = [];
+
+  // Restore buttons that may have been hidden in bmList mode
+  $('#reader-bookmark-btn').style.display = '';
+  $('#reader-binding-btn').style.display = '';
+  $('#reader-bm-list-btn').style.display = '';
 
   // Revoke page object URLs
   for (const url of Object.values(App.pageCache)) {
@@ -2496,8 +2837,11 @@ function onPopState(e) {
     // Close any open modals
     hideModal('modal-new-list');
     hideModal('modal-folder');
+    hideModal('modal-bm-browser');
   } else if (state.screen === 'reader' && state.bookId) {
     openReader(state.bookId);
+  } else if (state.screen === 'reader' && state.bmList) {
+    openBmListReader(state.bmList);
   }
 }
 
@@ -2507,16 +2851,16 @@ function onPopState(e) {
 function onKeyDown(e) {
   if ($('#reader-screen').style.display !== 'flex') return;
   // Don't capture keys when editing bookmark note
-  if (e.target.classList.contains('bm-note-input')) return;
+  if (e.target.classList.contains('bm-note-input') || e.target.classList.contains('bmlist-new-input')) return;
 
-  const binding = getBinding();
+  const binding = App.bmListMode ? 'ltr' : getBinding();
   if (e.key === 'ArrowRight') {
     e.preventDefault();
     binding === 'rtl' ? goPrev() : goNext();
   } else if (e.key === 'ArrowLeft') {
     e.preventDefault();
     binding === 'rtl' ? goNext() : goPrev();
-  } else if (e.key === 'b' || e.key === 'B') {
+  } else if ((e.key === 'b' || e.key === 'B') && !App.bmListMode) {
     e.preventDefault();
     toggleCurrentBookmark();
   } else if (e.key === 'Escape') {
@@ -2547,7 +2891,7 @@ function setupSwipe() {
 
     if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx) || dt > 500) return;
 
-    const binding = getBinding();
+    const binding = App.bmListMode ? 'ltr' : getBinding();
     if (dx > 0) {
       // Swipe right
       binding === 'rtl' ? goNext() : goPrev();
@@ -2711,6 +3055,7 @@ function renderBmPanel() {
         <div class="bm-entry-time">${timeStr}</div>
       </div>
       <div class="bm-entry-actions">
+        <button class="bm-entry-btn addlist-btn" title="マイリストに追加">+📋</button>
         <button class="bm-entry-btn memo-btn" title="メモ編集">✏️</button>
         <button class="bm-entry-btn del" title="削除">✕</button>
       </div>
@@ -2723,6 +3068,12 @@ function renderBmPanel() {
       prefetch(bm.page);
       closeBmPanel();
     });
+
+    // Add to bmList
+    entry.querySelector('.addlist-btn').onclick = (e) => {
+      e.stopPropagation();
+      showAddToBmListDropdown(e.target, bookId, bm.page);
+    };
 
     // Memo edit button
     entry.querySelector('.memo-btn').onclick = (e) => {
@@ -2789,6 +3140,634 @@ async function loadBmThumb(page, entry) {
     const thumbDiv = entry.querySelector('.bm-entry-thumb');
     if (thumbDiv) thumbDiv.innerHTML = `<img src="${url}" alt="">`;
   } catch (e) { /* silent */ }
+}
+
+// ============================================================
+// BOOKMARK BROWSER (shelf-level modal)
+// ============================================================
+function getAllBookmarksSorted() {
+  const all = [];
+  const bookmarks = App.metadata.bookmarks || {};
+  for (const [bookId, bms] of Object.entries(bookmarks)) {
+    for (const bm of bms) {
+      all.push({ bookId, page: bm.page, note: bm.note, created: bm.created || '' });
+    }
+  }
+  all.sort((a, b) => b.created.localeCompare(a.created)); // newest first
+  return all;
+}
+
+function openBmBrowser() {
+  App.bmBrowserDetail = null;
+  renderBmBrowser();
+  showModal('modal-bm-browser');
+}
+
+function renderBmBrowser() {
+  const body = $('#bm-browser-body');
+  if (App.bmBrowserTab === 'all') {
+    renderBmBrowserAll(body);
+  } else {
+    if (App.bmBrowserDetail) {
+      renderBmListDetail(body, App.bmBrowserDetail);
+    } else {
+      renderBmBrowserLists(body);
+    }
+  }
+}
+
+function renderBmBrowserAll(body) {
+  const all = getAllBookmarksSorted();
+  if (all.length === 0) {
+    body.innerHTML = '<div class="bm-panel-empty">ブックマークはありません</div>';
+    return;
+  }
+  body.innerHTML = '';
+  for (const item of all) {
+    const meta = App.metadata.books[item.bookId] || {};
+    const title = meta.title || item.bookId;
+    const timeStr = item.created ? new Date(item.created).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+    const row = document.createElement('div');
+    row.className = 'bm-all-entry';
+    row.innerHTML = `
+      <div class="bm-entry-thumb"><span class="bm-entry-thumb-placeholder">p.${item.page + 1}</span></div>
+      <div class="bm-entry-info">
+        <div class="bm-entry-page">${item.page + 1}ページ</div>
+        <div class="bm-all-book">${title}</div>
+        ${item.note ? `<div class="bmlist-item-note">${item.note}</div>` : ''}
+        <div class="bm-entry-time">${timeStr}</div>
+      </div>
+      <div class="bm-all-actions">
+        <button class="bm-all-btn accent" title="マイリストに追加">+リスト</button>
+        <button class="bm-all-btn del" title="削除">✕</button>
+      </div>
+    `;
+
+    // Load thumbnail async
+    loadBmBrowserThumb(item.bookId, item.page, row.querySelector('.bm-entry-thumb'));
+
+    // Add to bmList
+    row.querySelector('.accent').onclick = (e) => {
+      e.stopPropagation();
+      showAddToBmListDropdown(e.target, item.bookId, item.page);
+    };
+
+    // Delete
+    row.querySelector('.del').onclick = (e) => {
+      e.stopPropagation();
+      const bms = getBookmarks(item.bookId);
+      const idx = bms.findIndex(b => b.page === item.page);
+      if (idx >= 0) {
+        bms.splice(idx, 1);
+        toast(`ブックマーク削除`);
+        debouncedSave();
+        renderBmBrowser();
+      }
+    };
+
+    // Click to open book at page
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.bm-all-btn')) return;
+      const bookEntry = App.bookFolders.find(f => f.id === item.bookId);
+      if (bookEntry && bookEntry.metadataOnly) {
+        toast('未ダウンロード');
+        return;
+      }
+      hideModal('modal-bm-browser');
+      openReaderAtPage(item.bookId, item.page);
+    });
+
+    body.appendChild(row);
+  }
+}
+
+async function loadBmBrowserThumb(bookId, page, thumbDiv) {
+  // Try cover from store URL for DLsite/Fanza as a quick placeholder
+  if (App.coverCache[bookId]) {
+    thumbDiv.innerHTML = `<img src="${App.coverCache[bookId]}" alt="">`;
+  }
+}
+
+function showAddToBmListDropdown(anchor, bookId, page) {
+  // Remove any existing dropdown
+  document.querySelectorAll('.bm-add-dropdown').forEach(d => d.remove());
+
+  const lists = App.metadata.bmLists || {};
+  const dropdown = document.createElement('div');
+  dropdown.className = 'bm-add-dropdown';
+
+  if (Object.keys(lists).length === 0) {
+    dropdown.innerHTML = '<div class="bm-add-dropdown-item" style="color:#555;">マイリストがありません</div>';
+  } else {
+    for (const [name, list] of Object.entries(lists)) {
+      const inList = list.items && list.items.some(i => i.bookId === bookId && i.page === page);
+      const item = document.createElement('div');
+      item.className = 'bm-add-dropdown-item' + (inList ? ' in-list' : '');
+      item.textContent = (inList ? '✓ ' : '') + name;
+      item.onclick = (e) => {
+        e.stopPropagation();
+        if (inList) {
+          removeBmFromList(name, bookId, page);
+        } else {
+          addBmToList(name, bookId, page);
+        }
+        dropdown.remove();
+        renderBmBrowser();
+      };
+      dropdown.appendChild(item);
+    }
+  }
+
+  // Position near anchor
+  const rect = anchor.getBoundingClientRect();
+  dropdown.style.position = 'fixed';
+  dropdown.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
+  dropdown.style.top = (rect.bottom + 4) + 'px';
+  document.body.appendChild(dropdown);
+
+  // Auto close
+  const close = (e) => {
+    if (!dropdown.contains(e.target)) { dropdown.remove(); document.removeEventListener('click', close); }
+  };
+  setTimeout(() => document.addEventListener('click', close), 10);
+}
+
+function addBmToList(listName, bookId, page) {
+  const list = App.metadata.bmLists[listName];
+  if (!list) return;
+  if (!list.items) list.items = [];
+  if (list.items.some(i => i.bookId === bookId && i.page === page)) return;
+  list.items.push({ bookId, page });
+  toast(`「${listName}」に追加`);
+  debouncedSave();
+}
+
+function removeBmFromList(listName, bookId, page) {
+  const list = App.metadata.bmLists[listName];
+  if (!list || !list.items) return;
+  const idx = list.items.findIndex(i => i.bookId === bookId && i.page === page);
+  if (idx >= 0) {
+    list.items.splice(idx, 1);
+    toast(`「${listName}」から削除`);
+    debouncedSave();
+  }
+}
+
+// ============================================================
+// BM LISTS TAB
+// ============================================================
+function renderBmBrowserLists(body) {
+  const lists = App.metadata.bmLists || {};
+  body.innerHTML = '';
+
+  // New list creation header
+  const header = document.createElement('div');
+  header.className = 'bmlist-header';
+  header.innerHTML = `
+    <input class="bmlist-new-input" id="bmlist-new-name" placeholder="新しいマイリスト名..." maxlength="40">
+    <button class="bmlist-new-btn" id="bmlist-new-create">作成</button>
+  `;
+  body.appendChild(header);
+
+  header.querySelector('#bmlist-new-create').onclick = () => {
+    const name = header.querySelector('#bmlist-new-name').value.trim();
+    if (!name) return;
+    if (lists[name]) { toast('同名のリストがあります'); return; }
+    App.metadata.bmLists[name] = { items: [], created: new Date().toISOString() };
+    debouncedSave();
+    toast(`「${name}」を作成`);
+    renderBmBrowser();
+  };
+  header.querySelector('#bmlist-new-name').onkeydown = (e) => {
+    if (e.key === 'Enter') header.querySelector('#bmlist-new-create').click();
+  };
+
+  const names = Object.keys(lists);
+  if (names.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'bm-panel-empty';
+    empty.textContent = 'マイリストはまだありません';
+    body.appendChild(empty);
+    return;
+  }
+
+  for (const name of names) {
+    const list = lists[name];
+    const count = (list.items || []).length;
+    const card = document.createElement('div');
+    card.className = 'bmlist-card';
+    card.innerHTML = `
+      <div class="bmlist-card-icon">📋</div>
+      <div class="bmlist-card-info">
+        <div class="bmlist-card-name">${name}</div>
+        <div class="bmlist-card-count">${count}ページ</div>
+      </div>
+      <div class="bmlist-card-actions">
+        <button class="bm-all-btn accent" title="読む">▶ 読む</button>
+        <button class="bm-all-btn del" title="削除">✕</button>
+      </div>
+    `;
+
+    // Click card -> show detail view
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.bm-all-btn')) return;
+      App.bmBrowserDetail = name;
+      renderBmBrowser();
+    });
+
+    // Read button
+    card.querySelector('.accent').onclick = (e) => {
+      e.stopPropagation();
+      hideModal('modal-bm-browser');
+      openBmListReader(name);
+    };
+
+    // Delete
+    card.querySelector('.del').onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm(`マイリスト「${name}」を削除しますか？`)) return;
+      delete App.metadata.bmLists[name];
+      debouncedSave();
+      toast(`「${name}」を削除`);
+      renderBmBrowser();
+    };
+
+    body.appendChild(card);
+  }
+}
+
+// ============================================================
+// BM LIST DETAIL VIEW (inside modal)
+// ============================================================
+function renderBmListDetail(body, listName) {
+  const list = App.metadata.bmLists[listName];
+  if (!list) { App.bmBrowserDetail = null; renderBmBrowser(); return; }
+  const items = list.items || [];
+
+  body.innerHTML = '';
+
+  // Header with back button
+  const header = document.createElement('div');
+  header.className = 'bmlist-detail-header';
+  header.innerHTML = `
+    <button class="bmlist-detail-back">←</button>
+    <div class="bmlist-detail-title">${listName}（${items.length}ページ）</div>
+    <button class="bmlist-detail-read" ${items.length === 0 ? 'disabled' : ''}>▶ 読む</button>
+  `;
+  header.querySelector('.bmlist-detail-back').onclick = () => {
+    App.bmBrowserDetail = null;
+    renderBmBrowser();
+  };
+  header.querySelector('.bmlist-detail-read').onclick = () => {
+    if (items.length === 0) return;
+    hideModal('modal-bm-browser');
+    openBmListReader(listName);
+  };
+  body.appendChild(header);
+
+  if (items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'bm-panel-empty';
+    empty.innerHTML = 'ページがありません<br><span style="font-size:11px;color:#555;">「すべて」タブからブックマークを追加</span>';
+    body.appendChild(empty);
+    return;
+  }
+
+  // Draggable item list
+  const listEl = document.createElement('div');
+  listEl.id = 'bmlist-detail-items';
+  body.appendChild(listEl);
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const meta = App.metadata.books[item.bookId] || {};
+    const title = meta.title || item.bookId;
+    const bms = getBookmarks(item.bookId);
+    const bm = bms.find(b => b.page === item.page);
+    const note = bm ? bm.note : '';
+
+    const row = document.createElement('div');
+    row.className = 'bmlist-item';
+    row.draggable = true;
+    row.dataset.idx = i;
+    row.innerHTML = `
+      <div class="bmlist-drag-handle">⠿</div>
+      <div class="bmlist-item-thumb"><span class="bm-entry-thumb-placeholder">p.${item.page + 1}</span></div>
+      <div class="bmlist-item-info">
+        <div class="bmlist-item-book">${title}</div>
+        <div class="bmlist-item-page">${item.page + 1}ページ</div>
+        ${note ? `<div class="bmlist-item-note">${note}</div>` : ''}
+      </div>
+      <div class="bm-all-actions">
+        <button class="bm-all-btn del" title="削除">✕</button>
+      </div>
+    `;
+
+    // Load thumb
+    loadBmBrowserThumb(item.bookId, item.page, row.querySelector('.bmlist-item-thumb'));
+
+    // Delete from list
+    row.querySelector('.del').onclick = (e) => {
+      e.stopPropagation();
+      items.splice(i, 1);
+      debouncedSave();
+      renderBmListDetail(body, listName);
+    };
+
+    listEl.appendChild(row);
+  }
+
+  // Setup drag reorder for detail items
+  setupBmListDrag(listEl, items, listName, body);
+}
+
+function setupBmListDrag(container, items, listName, bodyEl) {
+  let dragIdx = null;
+
+  container.querySelectorAll('.bmlist-item').forEach(row => {
+    row.addEventListener('dragstart', (e) => {
+      dragIdx = parseInt(row.dataset.idx);
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    });
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave', () => {
+      row.classList.remove('drag-over');
+    });
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('drag-over');
+      const dropIdx = parseInt(row.dataset.idx);
+      if (dragIdx !== null && dragIdx !== dropIdx) {
+        const moved = items.splice(dragIdx, 1)[0];
+        items.splice(dropIdx, 0, moved);
+        debouncedSave();
+        renderBmListDetail(bodyEl, listName);
+      }
+    });
+  });
+
+  // Touch drag support
+  let touchRow = null, touchIdx = null, touchClone = null;
+
+  container.addEventListener('touchstart', (e) => {
+    const handle = e.target.closest('.bmlist-drag-handle');
+    if (!handle) return;
+    const row = handle.closest('.bmlist-item');
+    if (!row) return;
+    const idx = parseInt(row.dataset.idx);
+    if (isNaN(idx)) return;
+
+    e.preventDefault();
+    touchRow = row;
+    touchIdx = idx;
+    row.classList.add('dragging');
+
+    const rect = row.getBoundingClientRect();
+    touchClone = row.cloneNode(true);
+    touchClone.style.cssText = `position:fixed;pointer-events:none;z-index:9999;opacity:0.8;width:${rect.width}px;top:${rect.top}px;left:${rect.left}px;`;
+    document.body.appendChild(touchClone);
+  }, { passive: false });
+
+  container.addEventListener('touchmove', (e) => {
+    if (!touchRow) return;
+    e.preventDefault();
+    const ty = e.touches[0].clientY;
+    const tx = e.touches[0].clientX;
+    if (touchClone) touchClone.style.top = (ty - 25) + 'px';
+    container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    const el = document.elementFromPoint(tx, ty);
+    const target = el && el.closest('.bmlist-item');
+    if (target && target !== touchRow) target.classList.add('drag-over');
+  }, { passive: false });
+
+  container.addEventListener('touchend', (e) => {
+    if (!touchRow) return;
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const target = el && el.closest('.bmlist-item');
+    if (target && target !== touchRow) {
+      const dropIdx = parseInt(target.dataset.idx);
+      if (!isNaN(dropIdx) && touchIdx !== dropIdx) {
+        const moved = items.splice(touchIdx, 1)[0];
+        items.splice(dropIdx, 0, moved);
+        debouncedSave();
+        renderBmListDetail(bodyEl, listName);
+      }
+    }
+    touchRow.classList.remove('dragging');
+    container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    if (touchClone) { touchClone.remove(); touchClone = null; }
+    touchRow = null;
+    touchIdx = null;
+  });
+}
+
+// ============================================================
+// BM LIST READER (read a bmList as a virtual book)
+// ============================================================
+async function openBmListReader(listName) {
+  const list = App.metadata.bmLists[listName];
+  if (!list || !list.items || list.items.length === 0) {
+    toast('空のマイリストです');
+    return;
+  }
+
+  // Build virtual page list: resolve each item to its Dropbox path
+  const resolvedItems = [];
+  const pagePaths = [];
+
+  // We need page paths for all items. Group by bookId to avoid redundant folder scans.
+  const bookPageMap = {}; // bookId -> Set of page numbers needed
+  for (const item of list.items) {
+    if (!bookPageMap[item.bookId]) bookPageMap[item.bookId] = new Set();
+    bookPageMap[item.bookId].add(item.page);
+  }
+
+  // Resolve paths per book
+  const bookPathCache = {}; // bookId -> sorted image path array
+  for (const bookId of Object.keys(bookPageMap)) {
+    const meta = App.metadata.books[bookId] || {};
+    try {
+      const images = await listImagesRecursive('books/' + bookId, meta.hiddenPaths);
+      bookPathCache[bookId] = images.map(e => e.path);
+    } catch (e) {
+      bookPathCache[bookId] = [];
+    }
+  }
+
+  for (const item of list.items) {
+    const paths = bookPathCache[item.bookId] || [];
+    if (item.page < paths.length) {
+      resolvedItems.push({ bookId: item.bookId, page: item.page, path: paths[item.page] });
+      pagePaths.push(paths[item.page]);
+    }
+  }
+
+  if (pagePaths.length === 0) {
+    toast('読めるページがありません（未ダウンロード？）');
+    return;
+  }
+
+  // Setup reader in bmList mode
+  App.bmListMode = listName;
+  App.bmListItems = resolvedItems;
+  App.currentBook = '__bmlist__';
+  App.pageCache = {};
+  App.toolbarVisible = false;
+  App.currentPage = 0;
+  App.totalPages = pagePaths.length;
+  App.pagePaths = pagePaths;
+
+  $('#reader-toolbar').classList.remove('visible');
+  $('#reader-topbar').classList.remove('visible');
+  closeBmPanel();
+
+  $('#reader-title').textContent = '📋 ' + listName;
+  // Hide bookmark btn and binding btn in bmList mode
+  $('#reader-bookmark-btn').style.display = 'none';
+  $('#reader-binding-btn').style.display = 'none';
+  $('#reader-bm-list-btn').style.display = 'none';
+
+  showScreen('reader');
+  history.pushState({ screen: 'reader', bmList: listName }, '', '#bmlist/' + encodeURIComponent(listName));
+  $('#reader-loading').style.display = 'flex';
+  $('#reader-img').src = '';
+
+  // Setup slider
+  const slider = $('#reader-slider');
+  slider.min = 0;
+  slider.max = Math.max(0, pagePaths.length - 1);
+  slider.value = 0;
+  slider.style.direction = 'ltr'; // bmList always LTR
+
+  await showBmListPage(0);
+  bmListPrefetch(0);
+}
+
+async function showBmListPage(pageNum) {
+  if (pageNum < 0 || pageNum >= App.totalPages) return;
+  App.currentPage = pageNum;
+
+  const label = `${pageNum + 1} / ${App.totalPages}`;
+  $('#reader-page-label').textContent = label;
+  $('#reader-slider').value = pageNum;
+
+  // Show source info in title
+  if (App.bmListItems[pageNum]) {
+    const item = App.bmListItems[pageNum];
+    const meta = App.metadata.books[item.bookId] || {};
+    const title = meta.title || item.bookId;
+    $('#reader-title').textContent = `📋 ${App.bmListMode} — ${title} p.${item.page + 1}`;
+  }
+
+  // Hide bookmark indicator
+  $('#reader-bm-indicator').classList.remove('active');
+  // Clear bm dots
+  $('#reader-bm-dots').innerHTML = '';
+
+  if (App.pageCache[pageNum]) {
+    $('#reader-img').src = App.pageCache[pageNum];
+    $('#reader-loading').style.display = 'none';
+    return;
+  }
+
+  $('#reader-loading').style.display = 'flex';
+  try {
+    const pagePath = App.pagePaths[pageNum];
+    const buf = await App.storage.loadBinary(pagePath);
+    const ext = pagePath.split('.').pop().toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    const blob = new Blob([buf], { type: mime });
+    const url = URL.createObjectURL(blob);
+    App.pageCache[pageNum] = url;
+    if (App.currentPage === pageNum) {
+      $('#reader-img').src = url;
+      $('#reader-loading').style.display = 'none';
+    }
+  } catch (e) {
+    console.error('Failed to load bmList page:', e);
+    $('#reader-loading').style.display = 'none';
+  }
+}
+
+function bmListPrefetch(center) {
+  for (let i = 1; i <= 2; i++) {
+    bmListPrefetchOne(center + i);
+    bmListPrefetchOne(center - i);
+  }
+}
+
+async function bmListPrefetchOne(pageNum) {
+  if (pageNum < 0 || pageNum >= App.totalPages) return;
+  if (App.pageCache[pageNum]) return;
+  try {
+    const pagePath = App.pagePaths[pageNum];
+    const buf = await App.storage.loadBinary(pagePath);
+    const ext = pagePath.split('.').pop().toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    const blob = new Blob([buf], { type: mime });
+    App.pageCache[pageNum] = URL.createObjectURL(blob);
+  } catch(e) { /* silent */ }
+}
+
+// Helper: open a specific book at a specific page
+async function openReaderAtPage(bookId, page) {
+  App.currentBook = bookId;
+  App.pageCache = {};
+  App.toolbarVisible = false;
+  App.bmListMode = null;
+  App.bmListItems = [];
+  $('#reader-toolbar').classList.remove('visible');
+  $('#reader-topbar').classList.remove('visible');
+  closeBmPanel();
+
+  // Restore buttons hidden in bmList mode
+  $('#reader-bookmark-btn').style.display = '';
+  $('#reader-binding-btn').style.display = '';
+  $('#reader-bm-list-btn').style.display = '';
+
+  const meta = App.metadata.books[bookId] || {};
+  $('#reader-title').textContent = meta.title || bookId;
+  updateBindingBtn();
+
+  showScreen('reader');
+  history.pushState({ screen: 'reader', bookId: bookId }, '', '#read/' + encodeURIComponent(bookId));
+  $('#reader-loading').style.display = 'flex';
+  $('#reader-img').src = '';
+
+  try {
+    const images = await listImagesRecursive('books/' + bookId, meta.hiddenPaths);
+    App.totalPages = images.length;
+    App.pagePaths = images.map(e => e.path);
+    if (App.metadata.books[bookId]) App.metadata.books[bookId].totalPages = images.length;
+
+    const startPage = Math.min(page, Math.max(0, images.length - 1));
+    App.currentPage = startPage;
+
+    const slider = $('#reader-slider');
+    slider.min = 0;
+    slider.max = Math.max(0, images.length - 1);
+    slider.value = startPage;
+
+    await showPage(startPage);
+    prefetch(startPage);
+    updateBookmarkUI();
+  } catch (e) {
+    console.error('Failed to open book:', e);
+    toast('書籍を開けませんでした');
+    closeReader();
+  }
 }
 
 // ============================================================
