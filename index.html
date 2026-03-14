@@ -1768,19 +1768,7 @@ function showCtxMenu(x, y, bookId) {
       else if (action === 'folder') openFolderBrowser(bookId);
       else if (action === 'hide') hideBook(bookId);
       else if (action === 'store') { const u = getStoreUrl(bookId); if (u) window.open(u, '_blank'); }
-      else if (action === 'download') {
-        const u = getDownloadUrl(bookId);
-        if (u) {
-          let iframe = document.getElementById('dl-iframe');
-          if (!iframe) {
-            iframe = document.createElement('iframe');
-            iframe.id = 'dl-iframe';
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-          }
-          iframe.src = u;
-        }
-      }
+      else if (action === 'download') { const u = getDownloadUrl(bookId); if (u) window.open(u, '_blank'); }
       hideCtxMenu();
     };
   });
