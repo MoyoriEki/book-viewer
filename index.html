@@ -174,6 +174,8 @@
     object-fit: contain;
     display: block;
     background: #131313;
+    position: relative;
+    z-index: 0;
   }
   .book-cover-placeholder {
     width: 100%;
@@ -187,6 +189,8 @@
     padding: 6px;
     text-align: center;
     word-break: break-all;
+    position: relative;
+    z-index: 0;
   }
   .book-title {
     padding: 4px 6px 2px;
@@ -218,6 +222,7 @@
     letter-spacing: 0.03em;
     pointer-events: none;
     line-height: 1.2;
+    z-index: 2;
   }
   .book-badge.dlsite { background: #1a6fc4; color: #fff; }
   .book-badge.fanza { background: #e04040; color: #fff; }
@@ -727,8 +732,8 @@
     <h1>BookViewer</h1>
     <div class="shelf-topbar-actions">
       <button class="btn-icon" id="btn-new-list" title="新しいリスト">＋</button>
-      <button class="btn-icon" id="btn-hidden-books" title="非表示の作品">🚫</button>
       <button class="btn-icon" id="btn-refresh" title="再読み込み">↻</button>
+      <button class="btn-icon" id="btn-settings" title="設定" style="font-size:14px;">⚙</button>
       <button class="btn-icon" id="btn-disconnect" title="接続解除">⏻</button>
     </div>
   </div>
@@ -817,13 +822,16 @@
   </div>
 </div>
 
-<!-- ========== HIDDEN BOOKS MODAL ========== -->
-<div class="modal-overlay" id="modal-hidden">
+<!-- ========== SETTINGS MODAL ========== -->
+<div class="modal-overlay" id="modal-settings">
   <div class="modal-box" style="width: 480px;">
-    <h3>非表示の作品</h3>
-    <div class="hidden-list" id="hidden-list"></div>
+    <h3>設定</h3>
+    <div style="margin-top:12px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">非表示の作品 <span id="hidden-count" style="color:#555;"></span></div>
+      <div class="hidden-list" id="hidden-list"></div>
+    </div>
     <div class="modal-actions">
-      <button class="modal-btn" id="hidden-modal-close">閉じる</button>
+      <button class="modal-btn" id="settings-modal-close">閉じる</button>
     </div>
   </div>
 </div>
@@ -911,12 +919,12 @@ function init() {
   });
   $('#folder-modal-close').onclick = () => hideModal('modal-folder');
 
-  // Hidden books modal
-  $('#btn-hidden-books').onclick = () => openHiddenBooksModal();
-  $('#modal-hidden').addEventListener('click', (e) => {
-    if (e.target === $('#modal-hidden')) hideModal('modal-hidden');
+  // Settings modal
+  $('#btn-settings').onclick = () => openSettingsModal();
+  $('#modal-settings').addEventListener('click', (e) => {
+    if (e.target === $('#modal-settings')) hideModal('modal-settings');
   });
-  $('#hidden-modal-close').onclick = () => hideModal('modal-hidden');
+  $('#settings-modal-close').onclick = () => hideModal('modal-settings');
 
   // Browser back/forward
   window.addEventListener('popstate', onPopState);
@@ -1483,12 +1491,14 @@ function unhideBook(bookId) {
   }
 }
 
-function openHiddenBooksModal() {
+function openSettingsModal() {
   const list = $('#hidden-list');
   const hidden = App.metadata.hiddenBooks || [];
+  const countEl = $('#hidden-count');
+  if (countEl) countEl.textContent = hidden.length > 0 ? `(${hidden.length}件)` : '';
 
   if (hidden.length === 0) {
-    list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:16px 0;text-align:center;">非表示の作品はありません</div>';
+    list.innerHTML = '<div style="color:#555;font-size:11px;padding:12px 0;text-align:center;">非表示の作品はありません</div>';
   } else {
     list.innerHTML = '';
     for (const id of hidden) {
@@ -1502,13 +1512,13 @@ function openHiddenBooksModal() {
       `;
       row.querySelector('.hidden-entry-restore').onclick = () => {
         unhideBook(id);
-        openHiddenBooksModal(); // refresh modal
+        openSettingsModal();
       };
       list.appendChild(row);
     }
   }
 
-  showModal('modal-hidden');
+  showModal('modal-settings');
 }
 
 // ============================================================
