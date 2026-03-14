@@ -1192,34 +1192,66 @@ function renderGrid() {
 const DLSITE_ID_RE = /^[RBV]J\d{6,}$/;
 const FANZA_ID_RE = /^d_\d+$/;
 
+function dlsiteDirName(workno) {
+  const m = workno.match(/^([A-Z]+)(\d+)$/);
+  if (!m) return null;
+  const prefix = m[1], num = parseInt(m[2]);
+  const rounded = (Math.floor(num / 1000) + 1) * 1000;
+  return prefix + String(rounded).padStart(m[2].length, '0');
+}
+
+function fanzaUpscaleUrl(url) {
+  // 100x75 → 300x300 or larger available size
+  return url
+    .replace(/pl-\d+x\d+\./, 'pl-200x150.')
+    .replace(/-\d+x\d+\.jpg/, '-200x150.jpg');
+}
+
+async function tryLoadImage(url) {
+  const img = new Image();
+  return new Promise(resolve => {
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+}
+
 async function loadCover(bookId, card) {
   if (App.coverCache[bookId]) {
     setCoverImg(card, App.coverCache[bookId]);
     return;
   }
 
-  // DLsite作品: サムネURLから直接読み込み (高速、API不要)
+  // DLsite作品: 複数URLパターンを試行
   if (DLSITE_ID_RE.test(bookId)) {
-    const thumbUrl = `https://img.dlsite.jp/${bookId}_img_main_300x300.jpg`;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    const loaded = await new Promise(resolve => {
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
-      img.src = thumbUrl;
-    });
-    if (loaded) {
-      App.coverCache[bookId] = thumbUrl;
-      setCoverImg(card, thumbUrl);
-      autoFetchDLsiteMeta(bookId);
-      return;
+    const dir = dlsiteDirName(bookId);
+    const candidates = [
+      `https://img.dlsite.jp/modpub/images2/work/doujin/${dir}/${bookId}_img_main.jpg`,
+      `https://img.dlsite.jp/modpub/images2/work/doujin/${dir}/${bookId}_img_main_240x240.jpg`,
+      `https://img.dlsite.jp/${bookId}_img_main_300x300.jpg`,
+    ];
+    for (const url of candidates) {
+      if (await tryLoadImage(url)) {
+        App.coverCache[bookId] = url;
+        setCoverImg(card, url);
+        autoFetchDLsiteMeta(bookId);
+        return;
+      }
     }
   }
 
-  // Fanza作品: メタデータのimageSrcから読み込み（CORSなしなのでcrossOrigin不要）
+  // Fanza作品: メタデータのimageSrcから読み込み（高解像度化）
   if (FANZA_ID_RE.test(bookId)) {
     const meta = App.metadata.books[bookId];
     if (meta && meta.imageSrc) {
+      const hiRes = fanzaUpscaleUrl(meta.imageSrc);
+      // まず高解像度版を試す
+      if (await tryLoadImage(hiRes)) {
+        App.coverCache[bookId] = hiRes;
+        setCoverImg(card, hiRes);
+        return;
+      }
+      // フォールバック: 元のURL
       App.coverCache[bookId] = meta.imageSrc;
       setCoverImg(card, meta.imageSrc);
       return;
