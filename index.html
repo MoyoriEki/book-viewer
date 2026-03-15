@@ -237,6 +237,7 @@
   }
   .book-badge.dlsite { background: #1a6fc4; color: #fff; }
   .book-badge.fanza { background: #e04040; color: #fff; }
+  .book-badge.kindle { background: #ff9900; color: #111; }
   .book-badge.other { background: #555; color: #ccc; }
 
   /* Sort / filter bar */
@@ -447,6 +448,32 @@
     max-height: 100%;
     object-fit: contain;
   }
+  /* Spread mode: two images side by side */
+  .reader-canvas.spread {
+    flex-direction: row;
+    gap: 0;
+  }
+  .reader-canvas.spread img {
+    max-width: 50%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .reader-canvas.spread img.spread-hidden { display: none; }
+
+  /* Spread toggle button */
+  .reader-spread-btn {
+    background: none;
+    border: 1px solid #444;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .reader-spread-btn:hover { border-color: #666; color: var(--text); }
+  .reader-spread-btn.active { color: var(--accent); border-color: var(--accent); }
 
   /* Tap zones (invisible) */
   .tap-zone {
@@ -1299,6 +1326,7 @@
       <button class="shelf-pill active" data-store="all">すべて</button>
       <button class="shelf-pill" data-store="dlsite">DLsite</button>
       <button class="shelf-pill" data-store="fanza">Fanza</button>
+      <button class="shelf-pill" data-store="kindle">Kindle</button>
       <button class="shelf-pill" data-store="other">その他</button>
     </div>
     <div class="shelf-control-group">
@@ -1329,6 +1357,7 @@
     <button class="reader-back-btn" id="reader-back">←</button>
     <div class="reader-book-title" id="reader-title"></div>
     <button class="reader-binding-btn" id="reader-binding-btn">右綴じ</button>
+    <button class="reader-spread-btn" id="reader-spread-btn" title="見開き表示">見開き</button>
     <button class="reader-bookmark-btn" id="reader-bookmark-btn" title="このページをブックマーク">🔖</button>
   </div>
   <div class="reader-canvas" id="reader-canvas">
@@ -1336,6 +1365,7 @@
     <div class="tap-zone tap-zone-center" id="tap-center"></div>
     <div class="tap-zone tap-zone-right" id="tap-right"></div>
     <img id="reader-img" src="" alt="">
+    <img id="reader-img-2" src="" alt="" style="display:none;">
     <div class="reader-bookmark-indicator" id="reader-bm-indicator">🔖</div>
     <div class="reader-loading" id="reader-loading" style="display:none;">
       <div class="spinner"></div>
@@ -1465,6 +1495,7 @@ const App = {
   bmBrowserTab: 'all',
   bmBrowserDetail: null, // name of bmList being viewed in detail, or null
   bmListBinding: 'rtl',  // binding direction for bmList reader
+  spreadMode: false,    // 見開きモード
 };
 
 // ============================================================
@@ -1508,6 +1539,9 @@ function init() {
   $('#tap-center').onclick = toggleToolbar;
   $('#reader-slider').oninput = onSliderChange;
   $('#reader-binding-btn').onclick = toggleBinding;
+
+  // Spread mode
+  $('#reader-spread-btn').onclick = toggleSpread;
 
   // Bookmark controls
   $('#reader-bookmark-btn').onclick = toggleCurrentBookmark;
@@ -1780,7 +1814,7 @@ function getFilteredBooks() {
     books = books.filter(f => {
       const meta = App.metadata.books[f.id];
       const store = (meta && meta.store) || '';
-      if (App.currentStore === 'other') return !store || (store !== 'dlsite' && store !== 'fanza');
+      if (App.currentStore === 'other') return !store || (store !== 'dlsite' && store !== 'fanza' && store !== 'kindle');
       return store === App.currentStore;
     });
   }
@@ -1850,6 +1884,7 @@ function renderGrid() {
     let badgeHtml = '';
     if (store === 'dlsite') badgeHtml = '<span class="book-badge dlsite">DLsite</span>';
     else if (store === 'fanza') badgeHtml = '<span class="book-badge fanza">Fanza</span>';
+    else if (store === 'kindle') badgeHtml = '<span class="book-badge kindle">Kindle</span>';
     else if (store) badgeHtml = `<span class="book-badge other">${store}</span>`;
 
     // Maker name
@@ -2036,6 +2071,7 @@ function reorderList(listName, dragId, dropId, books) {
 
 const DLSITE_ID_RE = /^[RBV]J\d{6,}$/;
 const FANZA_ID_RE = /^d_\d+$/;
+const KINDLE_ID_RE = /^\d{10,13}$/;  // ISBN-10 or ISBN-13 (digits only)
 
 function getStoreUrl(bookId) {
   if (DLSITE_ID_RE.test(bookId)) {
@@ -2043,6 +2079,9 @@ function getStoreUrl(bookId) {
   }
   if (FANZA_ID_RE.test(bookId)) {
     return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${bookId}/`;
+  }
+  if (KINDLE_ID_RE.test(bookId)) {
+    return `https://www.amazon.co.jp/dp/${bookId}`;
   }
   return null;
 }
@@ -2616,14 +2655,17 @@ async function openReader(bookId) {
   App.toolbarVisible = false;
   App.bmListMode = null;
   App.bmListItems = [];
+  App.spreadMode = false;
   $('#reader-toolbar').classList.remove('visible');
   $('#reader-topbar').classList.remove('visible');
   closeBmPanel();
+  updateSpreadUI();
 
   // Restore buttons hidden in bmList mode
   $('#reader-bookmark-btn').style.display = '';
   $('#reader-binding-btn').style.display = '';
   $('#reader-bm-list-btn').style.display = '';
+  $('#reader-spread-btn').style.display = '';
 
   const meta = App.metadata.books[bookId] || {};
   $('#reader-title').textContent = meta.title || bookId;
@@ -2675,14 +2717,66 @@ async function showPage(pageNum) {
   if (pageNum < 0 || pageNum >= App.totalPages) return;
 
   App.currentPage = pageNum;
-  updatePageLabel();
 
-  const bookId = App.currentBook;
-  const pagePath = App.pagePaths[pageNum];
+  const img1 = $('#reader-img');
+  const img2 = $('#reader-img-2');
+
+  if (App.spreadMode && !App.bmListMode) {
+    // ── 見開きモード ──
+    // ページ0（表紙）は単独表示。以降は2ページずつ。
+    // RTL: img1=右ページ(偶数), img2=左ページ(奇数) → DOM順は img1(右) img2(左) だがflex-direction:rowなのでCSSでorder制御
+    const binding = getBinding();
+    let pageA = pageNum;      // 主ページ
+    let pageB = pageNum + 1;  // ペアページ
+
+    // 表紙(p0)は単独
+    if (pageA === 0) {
+      pageB = -1;
+    }
+    // ペアが範囲外
+    if (pageB >= App.totalPages) {
+      pageB = -1;
+    }
+
+    // RTL: 右にpageA, 左にpageB → img1が右, img2が左
+    // LTR: 左にpageA, 右にpageB → img1が左, img2が右
+    if (binding === 'rtl') {
+      img1.style.order = '2';  // 右側
+      img2.style.order = '1';  // 左側
+    } else {
+      img1.style.order = '1';  // 左側
+      img2.style.order = '2';  // 右側
+    }
+
+    // pageAをロード
+    await loadPageIntoImg(pageA, img1);
+
+    // pageBをロード（あれば）
+    if (pageB >= 0) {
+      img2.style.display = '';
+      await loadPageIntoImg(pageB, img2);
+    } else {
+      img2.style.display = 'none';
+      img2.src = '';
+    }
+
+    updatePageLabel();
+    $('#reader-loading').style.display = 'none';
+    saveProgress();
+    updateBookmarkUI();
+    return;
+  }
+
+  // ── 通常モード（単ページ）──
+  img2.style.display = 'none';
+  img2.src = '';
+  img1.style.order = '';
+
+  updatePageLabel();
 
   // Check cache
   if (App.pageCache[pageNum]) {
-    $('#reader-img').src = App.pageCache[pageNum];
+    img1.src = App.pageCache[pageNum];
     $('#reader-loading').style.display = 'none';
     saveProgress();
     updateBookmarkUI();
@@ -2693,16 +2787,9 @@ async function showPage(pageNum) {
   $('#reader-loading').style.display = 'flex';
 
   try {
-    const buf = await App.storage.loadBinary(pagePath);
-    const ext = pagePath.split('.').pop().toLowerCase();
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-    const blob = new Blob([buf], { type: mime });
-    const url = URL.createObjectURL(blob);
-    App.pageCache[pageNum] = url;
-
-    // Only update if still on this page
+    const url = await loadPageUrl(pageNum);
     if (App.currentPage === pageNum) {
-      $('#reader-img').src = url;
+      img1.src = url;
       $('#reader-loading').style.display = 'none';
     }
   } catch (e) {
@@ -2714,25 +2801,49 @@ async function showPage(pageNum) {
   updateBookmarkUI();
 }
 
+// 指定ページのURLをキャッシュから取得 or ロード
+async function loadPageUrl(pageNum) {
+  if (App.pageCache[pageNum]) return App.pageCache[pageNum];
+  const pagePath = App.pagePaths[pageNum];
+  const buf = await App.storage.loadBinary(pagePath);
+  const ext = pagePath.split('.').pop().toLowerCase();
+  const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+  const blob = new Blob([buf], { type: mime });
+  const url = URL.createObjectURL(blob);
+  App.pageCache[pageNum] = url;
+  return url;
+}
+
+// imgタグにページをロード
+async function loadPageIntoImg(pageNum, imgEl) {
+  if (pageNum < 0 || pageNum >= App.totalPages) {
+    imgEl.src = '';
+    return;
+  }
+  try {
+    const url = await loadPageUrl(pageNum);
+    imgEl.src = url;
+  } catch (e) {
+    imgEl.src = '';
+  }
+}
+
 function prefetch(centerPage) {
-  const range = 2;
-  for (let i = 1; i <= range; i++) {
+  const step = (App.spreadMode && !App.bmListMode) ? 2 : 1;
+  const range = step * 2;
+  for (let i = step; i <= range; i += step) {
     prefetchPage(centerPage + i);
+    if (App.spreadMode && !App.bmListMode) prefetchPage(centerPage + i + 1);
     prefetchPage(centerPage - i);
+    if (App.spreadMode && !App.bmListMode) prefetchPage(centerPage - i + 1);
   }
 }
 
 async function prefetchPage(pageNum) {
   if (pageNum < 0 || pageNum >= App.totalPages) return;
   if (App.pageCache[pageNum]) return;
-
-  const pagePath = App.pagePaths[pageNum];
   try {
-    const buf = await App.storage.loadBinary(pagePath);
-    const ext = pagePath.split('.').pop().toLowerCase();
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-    const blob = new Blob([buf], { type: mime });
-    App.pageCache[pageNum] = URL.createObjectURL(blob);
+    await loadPageUrl(pageNum);
   } catch (e) { /* silent */ }
 }
 
@@ -2744,8 +2855,17 @@ function saveProgress() {
 }
 
 function updatePageLabel() {
-  const label = `${App.currentPage + 1} / ${App.totalPages}`;
-  $('#reader-page-label').textContent = label;
+  if (App.spreadMode && !App.bmListMode) {
+    const p = App.currentPage;
+    const pairPage = (p === 0 || p + 1 >= App.totalPages) ? -1 : p + 1;
+    const label = pairPage >= 0
+      ? `${p + 1}-${pairPage + 1} / ${App.totalPages}`
+      : `${p + 1} / ${App.totalPages}`;
+    $('#reader-page-label').textContent = label;
+  } else {
+    const label = `${App.currentPage + 1} / ${App.totalPages}`;
+    $('#reader-page-label').textContent = label;
+  }
   $('#reader-slider').value = App.currentPage;
 }
 
@@ -2773,29 +2893,63 @@ function toggleBinding() {
   meta.bindingDirection = meta.bindingDirection === 'rtl' ? 'ltr' : 'rtl';
   updateBindingBtn();
   debouncedSave();
+  if (App.spreadMode) showPage(App.currentPage);
+}
+
+function toggleSpread() {
+  App.spreadMode = !App.spreadMode;
+  updateSpreadUI();
+  showPage(App.currentPage);
+}
+
+function updateSpreadUI() {
+  const btn = $('#reader-spread-btn');
+  const canvas = $('#reader-canvas');
+  const img2 = $('#reader-img-2');
+  btn.classList.toggle('active', App.spreadMode);
+  btn.textContent = App.spreadMode ? '見開き ON' : '見開き';
+  if (App.spreadMode) {
+    canvas.classList.add('spread');
+  } else {
+    canvas.classList.remove('spread');
+    img2.style.display = 'none';
+    img2.src = '';
+  }
+}
+
+function getSpreadStep() {
+  // 見開き時は2ページ送り。ただしp0（表紙）からは1ページ送り（p0は単独表示なので）
+  if (!App.spreadMode || App.bmListMode) return 1;
+  if (App.currentPage === 0) return 1; // 表紙→p1
+  return 2;
 }
 
 function goNext() {
-  if (App.currentPage < App.totalPages - 1) {
+  const step = getSpreadStep();
+  const nextPage = App.currentPage + step;
+  if (nextPage < App.totalPages) {
     if (App.bmListMode) {
-      showBmListPage(App.currentPage + 1);
-      bmListPrefetch(App.currentPage + 1);
+      showBmListPage(nextPage);
+      bmListPrefetch(nextPage);
     } else {
-      showPage(App.currentPage + 1);
-      prefetch(App.currentPage + 1);
+      showPage(nextPage);
+      prefetch(nextPage);
     }
   }
 }
 
 function goPrev() {
-  if (App.currentPage > 0) {
-    if (App.bmListMode) {
-      showBmListPage(App.currentPage - 1);
-      bmListPrefetch(App.currentPage - 1);
-    } else {
-      showPage(App.currentPage - 1);
-      prefetch(App.currentPage - 1);
-    }
+  if (App.currentPage <= 0) return;
+  const step = (App.spreadMode && !App.bmListMode) ? 2 : 1;
+  let prevPage = App.currentPage - step;
+  // p0は単独表示なのでp1から戻る時はp0に
+  if (prevPage < 0) prevPage = 0;
+  if (App.bmListMode) {
+    showBmListPage(prevPage);
+    bmListPrefetch(prevPage);
+  } else {
+    showPage(prevPage);
+    prefetch(prevPage);
   }
 }
 
@@ -2845,6 +2999,11 @@ function closeReader(fromPopState) {
   $('#reader-bookmark-btn').style.display = '';
   $('#reader-binding-btn').style.display = '';
   $('#reader-bm-list-btn').style.display = '';
+  $('#reader-spread-btn').style.display = '';
+
+  // Reset spread mode
+  App.spreadMode = false;
+  updateSpreadUI();
 
   // Revoke page object URLs
   for (const url of Object.values(App.pageCache)) {
@@ -2893,6 +3052,9 @@ function onKeyDown(e) {
   } else if ((e.key === 'b' || e.key === 'B') && !App.bmListMode) {
     e.preventDefault();
     toggleCurrentBookmark();
+  } else if ((e.key === 's' || e.key === 'S') && !App.bmListMode) {
+    e.preventDefault();
+    toggleSpread();
   } else if (e.key === 'Escape') {
     e.preventDefault();
     if ($('#bm-panel').classList.contains('visible')) closeBmPanel();
@@ -3681,6 +3843,7 @@ async function openBmListReader(listName) {
   // Hide bookmark btn in bmList mode (not relevant), but keep binding btn
   $('#reader-bookmark-btn').style.display = 'none';
   $('#reader-bm-list-btn').style.display = 'none';
+  $('#reader-spread-btn').style.display = 'none';
   $('#reader-binding-btn').style.display = '';
 
   // Set binding btn text for bmList
@@ -3776,14 +3939,17 @@ async function openReaderAtPage(bookId, page) {
   App.toolbarVisible = false;
   App.bmListMode = null;
   App.bmListItems = [];
+  App.spreadMode = false;
   $('#reader-toolbar').classList.remove('visible');
   $('#reader-topbar').classList.remove('visible');
   closeBmPanel();
+  updateSpreadUI();
 
   // Restore buttons hidden in bmList mode
   $('#reader-bookmark-btn').style.display = '';
   $('#reader-binding-btn').style.display = '';
   $('#reader-bm-list-btn').style.display = '';
+  $('#reader-spread-btn').style.display = '';
 
   const meta = App.metadata.books[bookId] || {};
   $('#reader-title').textContent = meta.title || bookId;
