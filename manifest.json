@@ -1,0 +1,8 @@
+{
+  "name": "BookViewer",
+  "short_name": "BookViewer",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0e0e0e",
+  "theme_color": "#0e0e0e"
+}
