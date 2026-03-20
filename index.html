@@ -2,4095 +2,1104 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>BookViewer</title>
-<meta name="theme-color" content="#0e0e0e">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#111114">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="BookViewer">
-<meta name="mobile-web-app-capable" content="yes">
-<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22BookViewer%22%2C%22short_name%22%3A%22BookViewer%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230e0e0e%22%2C%22theme_color%22%3A%22%230e0e0e%22%7D">
+<meta name="apple-mobile-web-app-title" content="Filer">
+<title>Dropbox Filer</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%23111114'/%3E%3Cpath d='M128 160h256v32H128zm0 80h256v32H128zm0 80h192v32H128z' fill='%236ea8fe'/%3E%3Crect x='320' y='280' width='80' height='80' rx='8' fill='%236ea8fe' opacity='.4'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%23111114'/%3E%3Cpath d='M128 160h256v32H128zm0 80h256v32H128zm0 80h192v32H128z' fill='%236ea8fe'/%3E%3Crect x='320' y='280' width='80' height='80' rx='8' fill='%236ea8fe' opacity='.4'/%3E%3C/svg%3E">
+<script>
+// ── Inline PWA Manifest ──
+const manifest = {
+  name: 'Dropbox Filer',
+  short_name: 'Filer',
+  start_url: location.pathname,
+  display: 'standalone',
+  background_color: '#111114',
+  theme_color: '#111114',
+  icons: [{
+    src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%23111114'/%3E%3Cpath d='M128 160h256v32H128zm0 80h256v32H128zm0 80h192v32H128z' fill='%236ea8fe'/%3E%3Crect x='320' y='280' width='80' height='80' rx='8' fill='%236ea8fe' opacity='.4'/%3E%3C/svg%3E",
+    sizes: '512x512',
+    type: 'image/svg+xml',
+    purpose: 'any maskable'
+  }]
+};
+const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+const manifestUrl = URL.createObjectURL(manifestBlob);
+const link = document.createElement('link');
+link.rel = 'manifest';
+link.href = manifestUrl;
+document.head.appendChild(link);
+
+// ── Inline Service Worker → separate file ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
 <link rel="stylesheet" href="https://moyorieki.github.io/storage-bridge/storage-bridge.css">
 <script src="https://moyorieki.github.io/storage-bridge/storage-bridge.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600&display=swap');
 
-  :root {
-    --bg: #0e0e0e;
-    --bg-raised: #171717;
-    --bg-hover: #222;
-    --text: #e0e0e0;
-    --text-muted: #777;
-    --accent: #e8cf6a;
-    --accent-dim: rgba(232, 207, 106, 0.15);
-    --border: #2a2a2a;
-    --danger: #e85050;
-    --radius: 6px;
-    --sb-accent: #e8cf6a;
-    --sb-bg: #171717;
-    --sb-text: #e0e0e0;
-    --sb-border: #2a2a2a;
-  }
+:root {
+  --bg: #111114;
+  --bg-raised: #19191e;
+  --bg-hover: #222228;
+  --bg-selected: #2a2a35;
+  --text: #d8d8e0;
+  --text-muted: #6e6e80;
+  --accent: #6ea8fe;
+  --accent-dim: rgba(110,168,254,0.12);
+  --accent-strong: #4d94ff;
+  --border: #28282e;
+  --border-light: #35353e;
+  --danger: #e85050;
+  --danger-dim: rgba(232,80,80,0.12);
+  --radius: 6px;
+  --radius-lg: 10px;
+  --toolbar-h: 44px;
+  --sidebar-w: 200px;
+  --thumb-size: 160;
+  --sb-accent: #6ea8fe;
+  --sb-bg: #19191e;
+  --sb-text: #d8d8e0;
+  --sb-border: #28282e;
+}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { touch-action: manipulation; -ms-touch-action: manipulation; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; touch-action: manipulation; }
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 13px; line-height: 1.5;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+  touch-action: manipulation;
+}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
 
-  body {
-    font-family: 'Noto Sans JP', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    overflow: hidden;
-    height: 100dvh;
-    width: 100vw;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-  }
+#connection-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100dvh; gap: 20px; padding: 24px; text-align: center;
+}
+#connection-screen h1 { font-size: 22px; font-weight: 600; }
+#connection-screen p { color: var(--text-muted); max-width: 360px; font-size: 13px; }
 
-  /* ============================================
-     CONNECTION SCREEN
-     ============================================ */
-  #connection-screen {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100dvh;
-    gap: 32px;
-  }
-  #connection-screen h1 {
-    font-size: 22px;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    color: var(--text-muted);
-  }
-  #dbx-ui {
-    max-width: 360px;
-    width: 90%;
-  }
+#app { display: none; height: 100dvh; flex-direction: column; }
+#app.active { display: flex; }
 
-  /* ============================================
-     SHELF SCREEN
-     ============================================ */
-  #shelf-screen {
-    display: none;
-    flex-direction: column;
-    height: 100dvh;
-  }
+/* ── Toolbar ───────────────────────────────────────────── */
+#toolbar {
+  display: flex; align-items: center; gap: 6px;
+  height: var(--toolbar-h); min-height: var(--toolbar-h);
+  padding: 0 10px; background: var(--bg-raised);
+  border-bottom: 1px solid var(--border); z-index: 20;
+}
+.tb-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border: none; border-radius: var(--radius);
+  background: transparent; color: var(--text); cursor: pointer; font-size: 16px;
+  transition: background 0.1s; flex-shrink: 0;
+}
+.tb-btn:hover { background: var(--bg-hover); }
+.tb-btn.disabled { opacity: 0.3; pointer-events: none; }
+.tb-btn.active { background: var(--accent-dim); color: var(--accent); }
 
-  /* Top bar */
-  .shelf-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .shelf-topbar h1 {
-    font-size: 16px;
-    font-weight: 400;
-    letter-spacing: 0.06em;
-    color: var(--text-muted);
-  }
-  .shelf-topbar-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-  .btn-icon {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    width: 34px;
-    height: 34px;
-    border-radius: var(--radius);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 15px;
-    transition: all 0.15s;
-  }
-  .btn-icon:hover { background: var(--bg-hover); color: var(--text); border-color: #444; }
+#breadcrumb {
+  display: flex; align-items: center; gap: 2px;
+  flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden;
+  padding: 0 4px; font-size: 12.5px; white-space: nowrap; scrollbar-width: none;
+}
+#breadcrumb::-webkit-scrollbar { display: none; }
+.bc-item { padding: 3px 7px; border-radius: 4px; cursor: pointer; color: var(--text-muted); flex-shrink: 0; }
+.bc-item:hover { background: var(--bg-hover); color: var(--text); }
+.bc-item.current { color: var(--text); font-weight: 500; cursor: default; }
+.bc-item.current:hover { background: transparent; }
+.bc-sep { color: var(--border-light); flex-shrink: 0; font-size: 11px; }
 
-  /* List tabs */
-  .shelf-tabs {
-    display: flex;
-    gap: 0;
-    padding: 0 20px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .shelf-tabs::-webkit-scrollbar { display: none; }
-  .shelf-tab {
-    padding: 10px 18px;
-    font-size: 13px;
-    font-weight: 400;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition: all 0.15s;
-    background: none;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-  }
-  .shelf-tab:hover { color: var(--text); }
-  .shelf-tab.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
+#thumb-slider { width: 80px; height: 3px; accent-color: var(--accent); cursor: pointer; opacity: 0.7; }
+#thumb-slider:hover { opacity: 1; }
+.tb-spacer { width: 1px; height: 20px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
 
-  /* Book grid */
-  .shelf-grid-wrap {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 12px;
-    scrollbar-width: thin;
-    scrollbar-color: #333 transparent;
-  }
-  .shelf-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-    gap: 8px;
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-  @media (min-width: 768px) {
-    .shelf-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
-  }
+#sort-select {
+  background: transparent; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-muted); font-family: inherit; font-size: 11.5px; padding: 3px 6px;
+  cursor: pointer; outline: none; flex-shrink: 0;
+}
+#sort-select option { background: var(--bg-raised); color: var(--text); }
 
-  /* Book card */
-  .book-card {
-    position: relative;
-    cursor: pointer;
-    border-radius: var(--radius);
-    overflow: hidden;
-    background: var(--bg-raised);
-    transition: transform 0.15s, box-shadow 0.15s;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-  }
-  .book-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
-  .book-card:active { transform: scale(0.97); }
+/* Selection count badge */
+#sel-badge {
+  display: none; padding: 2px 10px; border-radius: 12px; font-size: 11.5px;
+  background: var(--accent-dim); color: var(--accent); font-weight: 500; flex-shrink: 0;
+}
+#sel-badge.show { display: block; }
 
-  /* Drag reorder */
-  .book-card.dragging { opacity: 0.3; }
-  .book-card.drag-over { box-shadow: 0 0 0 2px var(--accent); }
-  .book-cover-wrap {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    background: #131313;
-    overflow: hidden;
-    flex-shrink: 0;
-  }
-  .book-cover {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-  }
-  .book-cover-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-    font-size: 10px;
-    padding: 6px;
-    text-align: center;
-    word-break: break-all;
-  }
-  .book-title {
-    padding: 4px 6px 2px;
-    font-size: 10px;
-    font-weight: 400;
-    line-height: 1.35;
-    color: var(--text-muted);
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    flex: 1;
-  }
-  .book-maker {
-    padding: 0 6px 4px;
-    font-size: 9px;
-    color: #444;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    flex-shrink: 0;
-  }
-  .book-badge {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    font-size: 8px;
-    font-weight: 600;
-    padding: 1px 4px;
-    border-radius: 3px;
-    letter-spacing: 0.03em;
-    pointer-events: none;
-    line-height: 1.2;
-  }
-  .book-badge.dlsite { background: #1a6fc4; color: #fff; }
-  .book-badge.fanza { background: #e04040; color: #fff; }
-  .book-badge.kindle { background: #ff9900; color: #111; }
-  .book-badge.other { background: #555; color: #ccc; }
+/* ── Body ──────────────────────────────────────────────── */
+#body { display: flex; flex: 1; overflow: hidden; }
 
-  /* Sort / filter bar */
-  .shelf-controls {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 20px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-  }
-  .shelf-control-group {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-  }
-  .shelf-control-label {
-    font-size: 10px;
-    color: #444;
-    margin-right: 1px;
-  }
-  .shelf-pill {
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: inherit;
-  }
-  .shelf-pill:hover { border-color: #444; color: var(--text); }
-  .shelf-pill.active {
-    background: var(--accent-dim);
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .shelf-sort-select {
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text-muted);
-    cursor: pointer;
-    font-family: inherit;
-    outline: none;
-  }
-  .shelf-sort-select:focus { border-color: var(--accent); }
-  .shelf-book-count {
-    font-size: 10px;
-    color: #444;
-    margin-left: auto;
-  }
+/* ── Sidebar ───────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w); min-width: var(--sidebar-w);
+  background: var(--bg-raised); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#sidebar.hidden { display: none; }
+#sidebar-header { padding: 10px 12px 6px; font-size: 11px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; }
+#fav-list { flex: 1; overflow-y: auto; padding: 2px 6px 10px; }
+.fav-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: var(--radius); cursor: pointer; font-size: 12.5px; color: var(--text); }
+.fav-item:hover { background: var(--bg-hover); }
+.fav-item.active { background: var(--accent-dim); color: var(--accent); }
+.fav-item .fav-icon { font-size: 14px; flex-shrink: 0; }
+.fav-item .fav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fav-item .fav-remove { display: none; width: 18px; height: 18px; border: none; border-radius: 3px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 12px; align-items: center; justify-content: center; }
+.fav-item:hover .fav-remove { display: flex; }
+.fav-item .fav-remove:hover { background: var(--danger-dim); color: var(--danger); }
+#sidebar-footer { padding: 8px; border-top: 1px solid var(--border); }
+#sidebar-footer button { width: 100%; padding: 5px; border: none; border-radius: var(--radius); background: transparent; color: var(--text-muted); cursor: pointer; font-family: inherit; font-size: 11.5px; }
+#sidebar-footer button:hover { background: var(--bg-hover); color: var(--text); }
 
-  /* Hidden books modal */
-  .hidden-list { max-height: 400px; overflow-y: auto; }
-  .hidden-entry {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 12px;
-  }
-  .hidden-entry:last-child { border-bottom: none; }
-  .hidden-entry-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hidden-entry-store { font-size: 10px; color: #555; flex-shrink: 0; }
-  .hidden-entry-restore {
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    flex-shrink: 0;
-    font-family: inherit;
-  }
-  .hidden-entry-restore:hover { border-color: var(--accent); color: var(--accent); }
+/* ── Main ──────────────────────────────────────────────── */
+#main { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 10px 10px 40vh; position: relative; }
 
-  /* Star button */
-  .book-star {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.55);
-    backdrop-filter: blur(4px);
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    color: #666;
-    transition: all 0.15s;
-    opacity: 0;
-  }
-  .book-cover-wrap:hover .book-star { opacity: 1; }
-  .book-star.active { color: var(--accent); opacity: 1; }
-  .book-star:hover { background: rgba(0,0,0,0.75); }
+/* ── Grid ──────────────────────────────────────────────── */
+#grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--thumb-size) * 1px), 1fr));
+  gap: 6px;
+}
+.grid-item {
+  display: flex; flex-direction: column; align-items: center;
+  border-radius: var(--radius); cursor: pointer; padding: 4px;
+  transition: background 0.1s; position: relative;
+}
+.grid-item:hover { background: var(--bg-hover); }
+.grid-item.selected { background: var(--accent-dim); outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+.grid-item.dragging { opacity: 0.25; }
 
-  /* Reading progress indicator */
-  .book-progress {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: rgba(255,255,255,0.05);
-  }
-  .book-progress-bar {
-    height: 100%;
-    background: var(--accent);
-    transition: width 0.3s;
-  }
+/* Checkbox */
+.grid-check {
+  position: absolute; top: 6px; left: 6px; z-index: 3;
+  width: 20px; height: 20px; border-radius: 4px;
+  border: 1.5px solid rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.35); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.1s; cursor: pointer;
+  font-size: 13px; color: #fff; line-height: 1;
+}
+.grid-item:hover .grid-check, .grid-item.selected .grid-check { opacity: 1; }
+@media (hover: none) { .grid-check { opacity: 0.7; } }
+.grid-item.selected .grid-check { background: var(--accent); border-color: var(--accent); }
 
-  /* Empty state */
-  .shelf-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 300px;
-    color: var(--text-muted);
-    font-size: 14px;
-    gap: 12px;
-  }
-  .shelf-empty-icon { font-size: 40px; opacity: 0.3; }
+/* Rubber-band selection */
+#lasso {
+  position: fixed; border: 1.5px solid var(--accent);
+  background: rgba(110,168,254,0.08); z-index: 15;
+  pointer-events: none; display: none;
+}
+.grid-item.drag-over-before::before,
+.grid-item.drag-over-after::after {
+  content: ''; position: absolute; top: 4px; bottom: 4px; width: 3px;
+  background: var(--accent); border-radius: 2px; z-index: 5;
+}
+.grid-item.drag-over-before::before { left: -3px; }
+.grid-item.drag-over-after::after { right: -3px; }
 
-  /* Context menu */
-  .ctx-menu {
-    position: fixed;
-    background: var(--bg-raised);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 4px 0;
-    min-width: 180px;
-    z-index: 1000;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    display: none;
-  }
-  .ctx-menu.show { display: block; }
-  .ctx-item {
-    padding: 8px 16px;
-    font-size: 13px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text);
-    transition: background 0.1s;
-  }
-  .ctx-item:hover { background: var(--bg-hover); }
-  .ctx-item.danger { color: var(--danger); }
-  .ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
+.grid-thumb {
+  width: 100%; aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; overflow: hidden; background: var(--bg); position: relative;
+}
+.grid-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.folder-preview {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  width: 100%; height: 100%; gap: 1px; background: var(--border);
+  border-radius: 4px; overflow: hidden; position: relative;
+}
+.folder-preview .fp-cell { background: var(--bg); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.folder-preview .fp-cell img { width: 100%; height: 100%; object-fit: cover; }
+.folder-preview .fp-cell .fp-empty { color: var(--text-muted); font-size: 10px; opacity: 0.2; }
+.folder-badge {
+  position: absolute; bottom: 3px; right: 3px; z-index: 2;
+  width: 30px; height: 30px; border-radius: 6px;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; pointer-events: none;
+}
+.grid-thumb .folder-icon { font-size: calc(var(--thumb-size) * 0.35px); color: var(--accent); opacity: 0.7; }
+.grid-thumb .file-icon { font-size: calc(var(--thumb-size) * 0.22px); color: var(--text-muted); opacity: 0.5; }
+.grid-thumb .loading-spinner { width: 20px; height: 20px; border: 2px solid var(--border-light); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Import progress bar (top of shelf) */
-  .import-bar {
-    height: 3px;
-    background: var(--border);
-    flex-shrink: 0;
-    display: none;
-  }
-  .import-bar.active { display: block; }
-  .import-bar-fill {
-    height: 100%;
-    background: var(--accent);
-    transition: width 0.3s;
-    width: 0%;
-  }
-  .import-status {
-    font-size: 10px;
-    color: #555;
-    padding: 2px 20px;
-    flex-shrink: 0;
-    display: none;
-  }
-  .import-status.active { display: block; }
+.grid-name { margin-top: 3px; font-size: 11px; text-align: center; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); padding: 0 2px; }
+.grid-item:hover .grid-name, .grid-item.selected .grid-name { color: var(--text); }
 
-  /* ============================================
-     READER SCREEN
-     ============================================ */
-  #reader-screen {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: #000;
-    z-index: 100;
-    flex-direction: column;
-  }
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; gap: 8px; color: var(--text-muted); font-size: 13px; }
+.empty-state .empty-icon { font-size: 36px; opacity: 0.4; }
+#loading-overlay { display: none; position: absolute; inset: 0; background: var(--bg); z-index: 10; align-items: center; justify-content: center; }
+#loading-overlay.active { display: flex; }
 
-  .reader-canvas {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    position: relative;
-    touch-action: none;
-  }
-  .reader-canvas img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-  }
-  /* Spread mode: two images side by side */
-  .reader-canvas.spread {
-    flex-direction: row;
-    gap: 0;
-  }
-  .reader-canvas.spread img {
-    max-width: 50%;
-    max-height: 100%;
-    object-fit: contain;
-  }
-  .reader-canvas.spread img.spread-hidden { display: none; }
+/* Touch drag clone */
+.touch-drag-clone { position: fixed; z-index: 999; pointer-events: none; opacity: 0.8; transform: scale(0.85); border: 2px solid var(--accent); border-radius: var(--radius); background: var(--bg-raised); }
 
-  /* Spread toggle button */
-  .reader-spread-btn {
-    background: none;
-    border: 1px solid #444;
-    color: var(--text-muted);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: var(--radius);
-    white-space: nowrap;
-    transition: all 0.15s;
-  }
-  .reader-spread-btn:hover { border-color: #666; color: var(--text); }
-  .reader-spread-btn.active { color: var(--accent); border-color: var(--accent); }
+/* ── Context Menu ──────────────────────────────────────── */
+#ctx-menu { display: none; position: fixed; z-index: 200; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 0; box-shadow: 0 8px 24px rgba(0,0,0,0.5); min-width: 180px; }
+#ctx-menu.show { display: block; }
+.ctx-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; font-size: 12.5px; color: var(--text); }
+.ctx-item:hover { background: var(--bg-hover); }
+.ctx-item.danger { color: var(--danger); }
+.ctx-item.danger:hover { background: var(--danger-dim); }
+.ctx-item .ctx-icon { width: 16px; text-align: center; font-size: 13px; }
+.ctx-sep { height: 1px; background: var(--border); margin: 4px 8px; }
 
-  /* Tap zones (invisible) */
-  .tap-zone {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    z-index: 10;
-    cursor: pointer;
-  }
-  .tap-zone-left { left: 0; width: 30%; }
-  .tap-zone-center { left: 30%; width: 40%; }
-  .tap-zone-right { right: 0; width: 30%; }
+/* ── Image Viewer ──────────────────────────────────────── */
+#viewer { display: none; position: fixed; inset: 0; z-index: 100; background: #000; flex-direction: column; }
+#viewer.active { display: flex; }
+#viewer-topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 110; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: linear-gradient(rgba(0,0,0,0.7), transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+#viewer-topbar.visible { opacity: 1; pointer-events: auto; }
+#viewer-title { flex: 1; font-size: 13px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewer-btn { width: 36px; height: 36px; border: none; border-radius: var(--radius); background: rgba(255,255,255,0.1); color: #fff; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+.viewer-btn:hover { background: rgba(255,255,255,0.2); }
+#viewer-img-wrap { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+#viewer-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+#viewer-img.loading { opacity: 0; }
+.tap-zone { position: absolute; top: 0; bottom: 0; width: 30%; z-index: 105; cursor: pointer; }
+.tap-zone.left { left: 0; } .tap-zone.right { right: 0; }
+.tap-zone.center { left: 30%; width: 40%; cursor: default; }
+#viewer-bottombar { position: absolute; bottom: 0; left: 0; right: 0; z-index: 110; display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: linear-gradient(transparent, rgba(0,0,0,0.7)); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+#viewer-bottombar.visible { opacity: 1; pointer-events: auto; }
+#viewer-slider { flex: 1; height: 3px; accent-color: var(--accent); cursor: pointer; }
+#viewer-page-label { font-size: 12px; color: rgba(255,255,255,0.7); min-width: 60px; text-align: right; }
 
-  /* Reader toolbar (hidden by default, shown on center tap) */
-  .reader-toolbar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0,0,0,0.85));
-    padding: 40px 20px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    z-index: 20;
-    transform: translateY(100%);
-    transition: transform 0.25s ease;
-  }
-  .reader-toolbar.visible { transform: translateY(0); }
+/* ── Modals ────────────────────────────────────────────── */
+.modal-overlay { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+.modal-overlay.show { display: flex; }
+.modal-box { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; width: 90%; max-width: 380px; }
+.modal-box.wide { max-width: 520px; }
+.modal-box h3 { font-size: 15px; font-weight: 500; margin-bottom: 12px; }
+.modal-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-family: inherit; font-size: 13px; outline: none; }
+.modal-input:focus { border-color: var(--accent); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.modal-btn { padding: 6px 16px; border: none; border-radius: var(--radius); font-family: inherit; font-size: 13px; cursor: pointer; }
+.modal-btn.primary { background: var(--accent); color: #000; font-weight: 500; }
+.modal-btn.primary:hover { background: var(--accent-strong); }
+.modal-btn.cancel { background: var(--bg-hover); color: var(--text); }
+.modal-btn.cancel:hover { background: var(--bg-selected); }
 
-  .reader-topbar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(rgba(0,0,0,0.85), transparent);
-    padding: 16px 20px 40px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    z-index: 20;
-    transform: translateY(-100%);
-    transition: transform 0.25s ease;
-  }
-  .reader-topbar.visible { transform: translateY(0); }
+.preset-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.preset-row label { font-size: 12px; color: var(--text-muted); min-width: 70px; }
+.preset-select, .preset-input {
+  flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg); color: var(--text); font-family: inherit; font-size: 12.5px; outline: none;
+}
+.preset-select:focus, .preset-input:focus { border-color: var(--accent); }
+#rename-preview { max-height: 240px; overflow-y: auto; margin: 10px 0; border: 1px solid var(--border); border-radius: var(--radius); font-size: 11.5px; }
+.rp-row { display: flex; padding: 4px 10px; gap: 8px; border-bottom: 1px solid var(--border); }
+.rp-row:last-child { border-bottom: none; }
+.rp-old { flex: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-arrow { color: var(--accent); flex-shrink: 0; }
+.rp-new { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .reader-back-btn {
-    background: none;
-    border: none;
-    color: var(--text);
-    font-size: 22px;
-    cursor: pointer;
-    padding: 4px 8px;
-  }
-  .reader-book-title {
-    font-size: 13px;
-    color: var(--text-muted);
-    flex: 1;
-    text-align: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin: 0 12px;
-  }
-  .reader-binding-btn {
-    background: none;
-    border: 1px solid #444;
-    color: var(--text-muted);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: var(--radius);
-    white-space: nowrap;
-  }
-  .reader-binding-btn:hover { border-color: #666; color: var(--text); }
+/* ── Toast ─────────────────────────────────────────────── */
+#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: var(--radius); background: var(--bg-raised); border: 1px solid var(--border); color: var(--text); font-size: 12.5px; z-index: 500; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+#toast.show { opacity: 1; }
 
-  .reader-slider-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .reader-page-label {
-    font-size: 12px;
-    color: var(--text-muted);
-    min-width: 60px;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-  }
-  .reader-slider {
-    flex: 1;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 4px;
-    background: #333;
-    border-radius: 2px;
-    outline: none;
-  }
-  .reader-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-  }
-  .reader-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-    border: none;
-  }
-  /* RTL slider: direction reversed in JS by swapping min/max values */
-
-  /* Loading spinner */
-  .reader-loading {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 5;
-  }
-  .spinner {
-    width: 28px;
-    height: 28px;
-    border: 2px solid #333;
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Loading overlay for shelf */
-  .shelf-loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 200px;
-    color: var(--text-muted);
-    font-size: 13px;
-    gap: 10px;
-  }
-
-  /* New list modal */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 500;
-    display: none;
-    align-items: center;
-    justify-content: center;
-  }
-  .modal-overlay.show { display: flex; }
-  .modal-box {
-    background: var(--bg-raised);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 24px;
-    width: 320px;
-    max-width: 90vw;
-  }
-  .modal-box h3 {
-    font-size: 15px;
-    font-weight: 500;
-    margin-bottom: 16px;
-  }
-  .modal-input {
-    width: 100%;
-    padding: 10px 12px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text);
-    font-size: 14px;
-    font-family: inherit;
-    outline: none;
-  }
-  .modal-input:focus { border-color: var(--accent); }
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-  .modal-btn {
-    padding: 8px 18px;
-    border-radius: var(--radius);
-    font-size: 13px;
-    font-family: inherit;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-    transition: all 0.15s;
-  }
-  .modal-btn:hover { background: var(--bg-hover); }
-  .modal-btn.primary {
-    background: var(--accent);
-    color: #111;
-    border-color: var(--accent);
-    font-weight: 500;
-  }
-  .modal-btn.primary:hover { opacity: 0.85; }
-
-  /* Toast notification */
-  .toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(80px);
-    background: var(--bg-raised);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 13px;
-    z-index: 600;
-    transition: transform 0.25s ease;
-    pointer-events: none;
-  }
-  .toast.show { transform: translateX(-50%) translateY(0); }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-
-  /* Bookmark indicator on current page */
-  .reader-bookmark-indicator {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    font-size: 28px;
-    color: var(--accent);
-    z-index: 15;
-    pointer-events: none;
-    opacity: 0;
-    transform: scale(0.5);
-    transition: opacity 0.25s, transform 0.25s;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
-  }
-  .reader-bookmark-indicator.active { opacity: 1; transform: scale(1); }
-
-  /* Bookmark button in topbar */
-  .reader-bookmark-btn {
-    background: none;
-    border: 1px solid #444;
-    color: var(--text-muted);
-    font-size: 15px;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: var(--radius);
-    white-space: nowrap;
-    transition: all 0.15s;
-  }
-  .reader-bookmark-btn:hover { border-color: #666; color: var(--text); }
-  .reader-bookmark-btn.active { color: var(--accent); border-color: var(--accent); }
-
-  /* Bookmark list button in toolbar */
-  .reader-bm-list-btn {
-    background: none;
-    border: 1px solid #444;
-    color: var(--text-muted);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: var(--radius);
-    white-space: nowrap;
-    transition: all 0.15s;
-    align-self: flex-end;
-  }
-  .reader-bm-list-btn:hover { border-color: #666; color: var(--text); }
-  .reader-bm-list-btn .bm-count { color: var(--accent); margin-left: 4px; }
-
-  /* Bookmark dots on slider track */
-  .reader-slider-wrap {
-    position: relative;
-    flex: 1;
-    display: flex;
-    align-items: center;
-  }
-  .reader-slider-wrap .reader-slider { width: 100%; }
-  .reader-bm-dots {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    overflow: hidden;
-  }
-  .reader-bm-dot {
-    position: absolute;
-    top: 50%;
-    width: 4px;
-    height: 12px;
-    margin-top: -6px;
-    background: var(--accent);
-    border-radius: 2px;
-    opacity: 0.7;
-    pointer-events: auto;
-    cursor: pointer;
-  }
-  .reader-bm-dot:hover { opacity: 1; height: 16px; margin-top: -8px; }
-
-  /* Bookmark list panel (overlay on reader) */
-  .bm-panel {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    max-height: 55vh;
-    background: rgba(20, 20, 20, 0.97);
-    border-top: 1px solid var(--border);
-    z-index: 30;
-    display: flex;
-    flex-direction: column;
-    transform: translateY(100%);
-    transition: transform 0.25s ease;
-    backdrop-filter: blur(12px);
-  }
-  .bm-panel.visible { transform: translateY(0); }
-
-  .bm-panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .bm-panel-header h4 {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text);
-  }
-  .bm-panel-close {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 18px;
-    cursor: pointer;
-    padding: 2px 6px;
-  }
-  .bm-panel-close:hover { color: var(--text); }
-
-  .bm-panel-list {
-    overflow-y: auto;
-    flex: 1;
-    scrollbar-width: thin;
-    scrollbar-color: #333 transparent;
-  }
-  .bm-panel-empty {
-    padding: 32px 16px;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 13px;
-  }
-
-  .bm-entry {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: background 0.1s;
-  }
-  .bm-entry:hover { background: var(--bg-hover); }
-  .bm-entry:last-child { border-bottom: none; }
-  .bm-entry.current { background: var(--accent-dim); }
-
-  .bm-entry-thumb {
-    width: 40px;
-    height: 56px;
-    background: #111;
-    border-radius: 3px;
-    overflow: hidden;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .bm-entry-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .bm-entry-thumb-placeholder {
-    font-size: 9px;
-    color: #444;
-  }
-
-  .bm-entry-info {
-    flex: 1;
-    min-width: 0;
-  }
-  .bm-entry-page {
-    font-size: 13px;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
-  .bm-entry-note {
-    font-size: 11px;
-    color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-top: 2px;
-  }
-  .bm-entry-time {
-    font-size: 10px;
-    color: #444;
-    margin-top: 1px;
-  }
-
-  .bm-entry-actions {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-  .bm-entry-btn {
-    background: none;
-    border: 1px solid transparent;
-    color: var(--text-muted);
-    font-size: 12px;
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: all 0.15s;
-  }
-  .bm-entry-btn:hover { border-color: #444; color: var(--text); }
-  .bm-entry-btn.del:hover { color: var(--danger); border-color: var(--danger); }
-
-  /* Bookmark note edit inline */
-  .bm-note-input {
-    width: 100%;
-    padding: 4px 6px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-size: 11px;
-    font-family: inherit;
-    outline: none;
-    margin-top: 2px;
-  }
-  .bm-note-input:focus { border-color: var(--accent); }
-
-  /* ============================================
-     BOOKMARK BROWSER MODAL (shelf-level)
-     ============================================ */
-  .bm-browser {
-    display: flex;
-    flex-direction: column;
-    max-height: 70vh;
-  }
-  .bm-browser-tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .bm-browser-tab {
-    padding: 8px 16px;
-    font-size: 12px;
-    color: var(--text-muted);
-    cursor: pointer;
-    border: none;
-    background: none;
-    border-bottom: 2px solid transparent;
-    font-family: inherit;
-    transition: all 0.15s;
-  }
-  .bm-browser-tab:hover { color: var(--text); }
-  .bm-browser-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .bm-browser-body {
-    flex: 1;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #333 transparent;
-    min-height: 200px;
-  }
-
-  /* All bookmarks list */
-  .bm-all-entry {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.1s;
-  }
-  .bm-all-entry:last-child { border-bottom: none; }
-  .bm-all-entry:hover { background: var(--bg-hover); }
-  .bm-all-book {
-    font-size: 10px;
-    color: #555;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-top: 1px;
-  }
-  .bm-all-actions {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-  .bm-all-btn {
-    background: none;
-    border: 1px solid transparent;
-    color: var(--text-muted);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 3px 8px;
-    border-radius: 4px;
-    transition: all 0.15s;
-    font-family: inherit;
-    white-space: nowrap;
-  }
-  .bm-all-btn:hover { border-color: #444; color: var(--text); }
-  .bm-all-btn.del:hover { color: var(--danger); border-color: var(--danger); }
-  .bm-all-btn.accent { color: var(--accent); }
-  .bm-all-btn.accent:hover { border-color: var(--accent); }
-
-  /* BM Lists section */
-  .bmlist-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-  }
-  .bmlist-new-input {
-    flex: 1;
-    padding: 6px 10px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text);
-    font-size: 12px;
-    font-family: inherit;
-    outline: none;
-  }
-  .bmlist-new-input:focus { border-color: var(--accent); }
-  .bmlist-new-btn {
-    background: var(--accent);
-    color: #111;
-    border: none;
-    padding: 6px 14px;
-    border-radius: var(--radius);
-    font-size: 12px;
-    cursor: pointer;
-    font-family: inherit;
-    font-weight: 500;
-    flex-shrink: 0;
-  }
-  .bmlist-new-btn:hover { opacity: 0.85; }
-
-  .bmlist-card {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: background 0.1s;
-  }
-  .bmlist-card:hover { background: var(--bg-hover); }
-  .bmlist-card-icon {
-    font-size: 24px;
-    flex-shrink: 0;
-    width: 40px;
-    text-align: center;
-  }
-  .bmlist-card-info { flex: 1; min-width: 0; }
-  .bmlist-card-name {
-    font-size: 14px;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .bmlist-card-count {
-    font-size: 11px;
-    color: #555;
-    margin-top: 2px;
-  }
-  .bmlist-card-actions {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-
-  /* BM List detail view (inside modal) */
-  .bmlist-detail-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .bmlist-detail-back {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 18px;
-    cursor: pointer;
-    padding: 2px 6px;
-  }
-  .bmlist-detail-back:hover { color: var(--text); }
-  .bmlist-detail-title {
-    font-size: 14px;
-    font-weight: 500;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .bmlist-detail-read {
-    background: var(--accent);
-    color: #111;
-    border: none;
-    padding: 6px 14px;
-    border-radius: var(--radius);
-    font-size: 12px;
-    cursor: pointer;
-    font-family: inherit;
-    font-weight: 500;
-    flex-shrink: 0;
-  }
-  .bmlist-detail-read:hover { opacity: 0.85; }
-  .bmlist-detail-read:disabled { opacity: 0.4; cursor: default; }
-
-  /* Draggable items in bmlist detail */
-  .bmlist-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.1s;
-  }
-  .bmlist-item:last-child { border-bottom: none; }
-  .bmlist-item:hover { background: var(--bg-hover); }
-  .bmlist-item.dragging { opacity: 0.3; }
-  .bmlist-item.drag-over { box-shadow: inset 0 -2px 0 var(--accent); }
-  .bmlist-drag-handle {
-    cursor: grab;
-    color: #444;
-    font-size: 14px;
-    flex-shrink: 0;
-    padding: 4px;
-    user-select: none;
-    touch-action: none;
-  }
-  .bmlist-drag-handle:active { cursor: grabbing; }
-  .bmlist-item-thumb {
-    width: 36px;
-    height: 50px;
-    background: #111;
-    border-radius: 3px;
-    overflow: hidden;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .bmlist-item-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .bmlist-item-info {
-    flex: 1;
-    min-width: 0;
-  }
-  .bmlist-item-book {
-    font-size: 11px;
-    color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .bmlist-item-page {
-    font-size: 10px;
-    color: #555;
-    margin-top: 1px;
-  }
-  .bmlist-item-note {
-    font-size: 10px;
-    color: #444;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-top: 1px;
-    font-style: italic;
-  }
-
-  /* Add-to-bmlist dropdown */
-  .bm-add-dropdown {
-    position: absolute;
-    background: var(--bg-raised);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 4px 0;
-    min-width: 160px;
-    z-index: 1001;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  }
-  .bm-add-dropdown-item {
-    padding: 6px 14px;
-    font-size: 12px;
-    cursor: pointer;
-    color: var(--text);
-    transition: background 0.1s;
-  }
-  .bm-add-dropdown-item:hover { background: var(--bg-hover); }
-  .bm-add-dropdown-item.in-list { color: var(--accent); }
-
-  /* Bookmark browser PC sizing */
-  @media (min-width: 768px) {
-    #modal-bm-browser .bm-entry-thumb { width: 56px; height: 80px; }
-    #modal-bm-browser .bm-all-entry { padding: 12px 20px; gap: 14px; }
-    #modal-bm-browser .bm-entry-page { font-size: 14px; }
-    #modal-bm-browser .bm-all-book { font-size: 12px; }
-    #modal-bm-browser .bm-entry-time { font-size: 11px; }
-    #modal-bm-browser .bm-all-btn { font-size: 12px; padding: 4px 12px; }
-    #modal-bm-browser .bmlist-item-note { font-size: 11px; }
-    .bmlist-item-thumb { width: 52px; height: 72px; }
-    .bmlist-item { padding: 10px 20px; gap: 14px; }
-    .bmlist-item-book { font-size: 13px; }
-    .bmlist-item-page { font-size: 11px; }
-    .bmlist-card { padding: 14px 20px; gap: 14px; }
-    .bmlist-card-icon { font-size: 28px; width: 48px; }
-    .bmlist-card-name { font-size: 15px; }
-    .bmlist-card-count { font-size: 12px; }
-    .bmlist-detail-title { font-size: 16px; }
-    .bmlist-detail-read { font-size: 13px; padding: 8px 18px; }
-    .bmlist-header { padding: 14px 20px; }
-    .bmlist-new-input { font-size: 13px; padding: 8px 12px; }
-    .bmlist-new-btn { font-size: 13px; padding: 8px 18px; }
-    .bm-browser-tab { font-size: 13px; padding: 10px 20px; }
-    .bmlist-drag-handle { font-size: 18px; }
-  }
-
-  /* Folder browser modal */
-  .folder-tree {
-    max-height: 55vh;
-    overflow-y: auto;
-    margin: 12px 0;
-    scrollbar-width: thin;
-    scrollbar-color: #333 transparent;
-  }
-  .folder-entry {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 0;
-    font-size: 13px;
-    border-bottom: 1px solid var(--border);
-  }
-  .folder-entry:last-child { border-bottom: none; }
-  .folder-entry-icon { flex-shrink: 0; opacity: 0.5; font-size: 14px; }
-  .folder-entry-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-muted);
-  }
-  .folder-entry-name.is-folder { color: var(--text); font-weight: 500; }
-  .folder-entry-indent { width: 16px; flex-shrink: 0; }
-  .folder-entry-size {
-    font-size: 11px;
-    color: var(--text-muted);
-    flex-shrink: 0;
-    margin-right: 4px;
-  }
-  .folder-entry-del {
-    background: none;
-    border: 1px solid transparent;
-    color: var(--text-muted);
-    font-size: 13px;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
-    flex-shrink: 0;
-    transition: all 0.15s;
-  }
-  .folder-entry-del:hover { color: var(--danger); border-color: var(--danger); }
-  .folder-entry-hide {
-    background: none;
-    border: 1px solid transparent;
-    color: var(--text-muted);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 2px 8px;
-    border-radius: 4px;
-    flex-shrink: 0;
-    transition: all 0.15s;
-  }
-  .folder-entry-hide:hover { border-color: #444; }
-  .folder-entry.hidden-entry { opacity: 0.35; }
-  .folder-entry.hidden-entry .folder-entry-hide { color: var(--accent); }
-  .folder-modal-title {
-    font-size: 14px;
-    font-weight: 500;
-    margin-bottom: 4px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .folder-modal-path {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-  }
+/* ── Responsive ────────────────────────────────────────── */
+@media (display-mode: standalone) {
+  #toolbar { padding-top: env(safe-area-inset-top); height: calc(var(--toolbar-h) + env(safe-area-inset-top)); }
+  #viewer-bottombar { padding-bottom: env(safe-area-inset-bottom); }
+}
+@media (max-width: 700px) {
+  #sidebar { display: none; }
+  #sidebar.mobile-open { display: flex !important; position: fixed; top: var(--toolbar-h); left: 0; bottom: 0; z-index: 50; box-shadow: 4px 0 20px rgba(0,0,0,0.5); width: var(--sidebar-w); min-width: var(--sidebar-w); border-right: 1px solid var(--border); }
+  #main { padding: 6px; }
+}
 </style>
 </head>
 <body>
 
-<!-- ========== CONNECTION SCREEN ========== -->
-<div id="connection-screen">
-  <h1>BookViewer</h1>
-  <div id="dbx-ui"></div>
-</div>
+<div id="connection-screen"><h1>Dropbox Filer</h1><p>Dropbox上のファイルをブラウズ・管理するファイラー</p><div id="dbx-ui"></div></div>
 
-<!-- ========== SHELF SCREEN ========== -->
-<div id="shelf-screen">
-  <div class="shelf-topbar">
-    <h1>BookViewer</h1>
-    <div class="shelf-topbar-actions">
-      <button class="btn-icon" id="btn-import" title="ZIPインポート" style="font-size:12px;font-weight:500;">ZIP</button>
-      <button class="btn-icon" id="btn-bm-browser" title="ブックマーク" style="font-size:15px;">🔖</button>
-      <button class="btn-icon" id="btn-new-list" title="新しいリスト">＋</button>
-      <button class="btn-icon" id="btn-refresh" title="再読み込み">↻</button>
-      <button class="btn-icon" id="btn-settings" title="設定" style="font-size:14px;">⚙</button>
-      <button class="btn-icon" id="btn-disconnect" title="接続解除">⏻</button>
-    </div>
+<div id="app">
+  <div id="toolbar">
+    <button class="tb-btn" id="btn-sidebar" title="サイドバー">☰</button>
+    <button class="tb-btn" id="btn-back" title="戻る">←</button>
+    <button class="tb-btn" id="btn-forward" title="進む">→</button>
+    <button class="tb-btn" id="btn-up" title="上のフォルダ">↑</button>
+    <div id="breadcrumb"></div>
+    <span id="sel-badge"></span>
+    <select id="sort-select">
+      <option value="name_asc">名前 ↑</option>
+      <option value="name_desc">名前 ↓</option>
+      <option value="date_desc">更新日 ↓</option>
+      <option value="date_asc">更新日 ↑</option>
+      <option value="size_desc">サイズ ↓</option>
+      <option value="size_asc">サイズ ↑</option>
+    </select>
+    <div class="tb-spacer"></div>
+    <input type="range" id="thumb-slider" min="80" max="320" value="160" title="サムネサイズ">
+    <div class="tb-spacer"></div>
+    <button class="tb-btn" id="btn-select-all" title="全選択">☑</button>
+    <button class="tb-btn" id="btn-undo" title="リネーム取消" style="display:none">↩</button>
+    <button class="tb-btn" id="btn-refresh" title="更新">⟳</button>
+    <button class="tb-btn" id="btn-disconnect" title="切断">⏻</button>
   </div>
-  <div class="shelf-tabs" id="shelf-tabs"></div>
-  <div class="shelf-controls" id="shelf-controls">
-    <div class="shelf-control-group">
-      <span class="shelf-control-label">ストア:</span>
-      <button class="shelf-pill active" data-store="all">すべて</button>
-      <button class="shelf-pill" data-store="dlsite">DLsite</button>
-      <button class="shelf-pill" data-store="fanza">Fanza</button>
-      <button class="shelf-pill" data-store="kindle">Kindle</button>
-      <button class="shelf-pill" data-store="other">その他</button>
-    </div>
-    <div class="shelf-control-group">
-      <span class="shelf-control-label">並び順:</span>
-      <select class="shelf-sort-select" id="shelf-sort">
-        <option value="purchase_desc">購入日 新→古</option>
-        <option value="purchase_asc">購入日 古→新</option>
-        <option value="lastread_desc">最近読んだ順</option>
-        <option value="maker_asc">サークル名 A→Z</option>
-        <option value="title_asc">タイトル A→Z</option>
-        <option value="title_desc">タイトル Z→A</option>
-        <option value="progress_desc">進捗 多→少</option>
-        <option value="custom">カスタム（ドラッグ並替）</option>
-      </select>
-    </div>
-    <span class="shelf-book-count" id="shelf-book-count"></span>
-  </div>
-  <div class="import-bar" id="import-bar"><div class="import-bar-fill" id="import-bar-fill"></div></div>
-  <div class="import-status" id="import-status-text"></div>
-  <div class="shelf-grid-wrap">
-    <div class="shelf-grid" id="shelf-grid"></div>
+  <div id="body">
+    <div id="sidebar"><div id="sidebar-header">お気に入り</div><div id="fav-list"></div><div id="sidebar-footer"><button id="btn-add-fav">＋ 現在のフォルダを追加</button></div></div>
+    <div id="main"><div id="loading-overlay"><div class="loading-spinner" style="width:28px;height:28px;border:3px solid var(--border-light);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></div></div><div id="grid"></div></div>
   </div>
 </div>
 
-<!-- ========== READER SCREEN ========== -->
-<div id="reader-screen">
-  <div class="reader-topbar" id="reader-topbar">
-    <button class="reader-back-btn" id="reader-back">←</button>
-    <div class="reader-book-title" id="reader-title"></div>
-    <button class="reader-binding-btn" id="reader-binding-btn">右綴じ</button>
-    <button class="reader-spread-btn" id="reader-spread-btn" title="見開き表示">見開き</button>
-    <button class="reader-bookmark-btn" id="reader-bookmark-btn" title="このページをブックマーク">🔖</button>
-  </div>
-  <div class="reader-canvas" id="reader-canvas">
-    <div class="tap-zone tap-zone-left" id="tap-left"></div>
-    <div class="tap-zone tap-zone-center" id="tap-center"></div>
-    <div class="tap-zone tap-zone-right" id="tap-right"></div>
-    <img id="reader-img" src="" alt="">
-    <img id="reader-img-2" src="" alt="" style="display:none;">
-    <div class="reader-bookmark-indicator" id="reader-bm-indicator">🔖</div>
-    <div class="reader-loading" id="reader-loading" style="display:none;">
-      <div class="spinner"></div>
-    </div>
-  </div>
-  <div class="reader-toolbar" id="reader-toolbar">
-    <div class="reader-slider-row">
-      <span class="reader-page-label" id="reader-page-label">1 / 1</span>
-      <div class="reader-slider-wrap" id="reader-slider-wrap">
-        <input type="range" class="reader-slider" id="reader-slider" min="0" max="0" value="0">
-        <div class="reader-bm-dots" id="reader-bm-dots"></div>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:flex-end;">
-      <button class="reader-bm-list-btn" id="reader-bm-list-btn">📋 ブックマーク<span class="bm-count" id="bm-count"></span></button>
-    </div>
-  </div>
-
-  <!-- Bookmark list panel -->
-  <div class="bm-panel" id="bm-panel">
-    <div class="bm-panel-header">
-      <h4>ブックマーク</h4>
-      <button class="bm-panel-close" id="bm-panel-close">✕</button>
-    </div>
-    <div class="bm-panel-list" id="bm-panel-list"></div>
-  </div>
+<div id="viewer">
+  <div id="viewer-topbar"><span id="viewer-title"></span><button class="viewer-btn" id="viewer-close" title="閉じる">✕</button></div>
+  <div id="viewer-img-wrap"><div class="tap-zone left" id="tap-left"></div><div class="tap-zone center" id="tap-center"></div><div class="tap-zone right" id="tap-right"></div><img id="viewer-img" src="" alt=""></div>
+  <div id="viewer-bottombar"><input type="range" id="viewer-slider" min="0" max="0" value="0"><span id="viewer-page-label"></span></div>
 </div>
+<div id="ctx-menu"></div>
 
-<!-- ========== CONTEXT MENU ========== -->
-<div class="ctx-menu" id="ctx-menu"></div>
+<div class="modal-overlay" id="modal-rename"><div class="modal-box"><h3>名前の変更</h3><input class="modal-input" id="rename-input" type="text" autocomplete="off"><div class="modal-actions"><button class="modal-btn cancel" id="rename-cancel">キャンセル</button><button class="modal-btn primary" id="rename-ok">変更</button></div></div></div>
 
-<!-- ========== NEW LIST MODAL ========== -->
-<div class="modal-overlay" id="modal-new-list">
-  <div class="modal-box">
-    <h3>新しいリスト</h3>
-    <input class="modal-input" id="input-list-name" placeholder="リスト名" maxlength="40">
-    <div class="modal-actions">
-      <button class="modal-btn" id="modal-cancel">キャンセル</button>
-      <button class="modal-btn primary" id="modal-create">作成</button>
-    </div>
-  </div>
-</div>
+<div class="modal-overlay" id="modal-batch-rename"><div class="modal-box wide">
+  <h3>連番リネーム（<span id="batch-count"></span>件）</h3>
+  <div class="preset-row"><label>プリセット</label><select class="preset-select" id="preset-select"><option value="nnn">001.ext</option><option value="nn">01.ext</option><option value="prefix_nnn">接頭辞_001.ext</option><option value="custom">カスタム</option></select></div>
+  <div class="preset-row" id="prefix-row" style="display:none"><label>接頭辞</label><input class="preset-input" id="prefix-input" placeholder="例: ネーム" autocomplete="off"></div>
+  <div class="preset-row" id="custom-row" style="display:none"><label>パターン</label><input class="preset-input" id="custom-input" placeholder="{NNN}.{ext}" autocomplete="off"></div>
+  <div id="rename-preview"></div>
+  <div class="modal-actions"><button class="modal-btn cancel" id="batch-cancel">キャンセル</button><button class="modal-btn primary" id="batch-exec">実行</button></div>
+</div></div>
 
-<!-- ========== TOAST ========== -->
-<div class="toast" id="toast"></div>
-
-<!-- ========== ZIP IMPORT (hidden input) ========== -->
-<input type="file" id="zip-input" accept=".zip" multiple style="display:none;">
-
-<!-- ========== FOLDER BROWSER MODAL ========== -->
-<div class="modal-overlay" id="modal-folder">
-  <div class="modal-box" style="width: 420px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-      <div style="overflow:hidden;">
-        <div class="folder-modal-title" id="folder-modal-title"></div>
-        <div class="folder-modal-path" id="folder-modal-path"></div>
-      </div>
-      <button class="modal-btn" id="folder-modal-delete" style="color:var(--danger);border-color:var(--danger);flex-shrink:0;font-size:12px;">フォルダ削除</button>
-    </div>
-    <div class="folder-tree" id="folder-tree"></div>
-    <div class="modal-actions">
-      <button class="modal-btn" id="folder-modal-close">閉じる</button>
-    </div>
-  </div>
-</div>
-
-<!-- ========== SETTINGS MODAL ========== -->
-<div class="modal-overlay" id="modal-settings">
-  <div class="modal-box" style="width: 480px;">
-    <h3>設定</h3>
-    <div style="margin-top:12px;">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">リスト出力</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-        <button class="modal-btn" id="btn-export-fav" style="font-size:11px;">ふぁぼ</button>
-        <span id="export-list-btns"></span>
-      </div>
-    </div>
-    <div style="margin-top:8px;">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">非表示の作品 <span id="hidden-count" style="color:#555;"></span></div>
-      <div class="hidden-list" id="hidden-list"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="modal-btn" id="settings-modal-close">閉じる</button>
-    </div>
-  </div>
-</div>
-
-<!-- ========== BOOKMARK BROWSER MODAL ========== -->
-<div class="modal-overlay" id="modal-bm-browser">
-  <div class="modal-box" style="width: 680px; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
-    <div style="padding: 16px 20px 0; flex-shrink: 0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <h3 style="margin:0;">🔖 ブックマーク</h3>
-        <button class="bm-panel-close" id="bm-browser-close">✕</button>
-      </div>
-    </div>
-    <div class="bm-browser">
-      <div class="bm-browser-tabs" id="bm-browser-tabs">
-        <button class="bm-browser-tab active" data-tab="all">すべて</button>
-        <button class="bm-browser-tab" data-tab="lists">マイリスト</button>
-      </div>
-      <div class="bm-browser-body" id="bm-browser-body"></div>
-    </div>
-  </div>
-</div>
+<div id="toast"></div>
+<div id="lasso"></div>
 
 <script>
-// ============================================================
-// APP STATE
-// ============================================================
+'use strict';
+
 const App = {
-  storage: null,
-  metadata: null,
-  currentList: 'すべて',
-  currentStore: 'all',
-  currentSort: 'purchase_desc',
-  currentBook: null,
-  currentPage: 0,
-  totalPages: 0,
-  pageCache: {},     // { pageNum: objectURL }
-  toolbarVisible: false,
-  bookFolders: [],   // raw folder list from storage
-  coverCache: {},    // { bookId: objectURL }
-  saving: false,
-  bmListMode: null,  // name of bmList being read, or null
-  bmListItems: [],   // resolved items when reading a bmList: [{ bookId, page, path }]
-  bmBrowserTab: 'all',
-  bmBrowserDetail: null, // name of bmList being viewed in detail, or null
-  bmListBinding: 'rtl',  // binding direction for bmList reader
-  spreadMode: false,    // 見開きモード
+  storage: null, currentPath: '', entries: [], favorites: [],
+  thumbCache: {}, sortMode: 'name_asc', thumbSize: 160,
+  viewerImages: [], viewerIndex: 0, viewerVisible: false, toolbarTimer: null,
+  prefetchCache: {}, navGen: 0,
+  // Selection & reorder
+  selected: new Set(),
+  customOrders: {},    // { path: [names] }
+  undoHistory: null,
 };
 
-// ============================================================
-// INIT
-// ============================================================
-function init() {
-  App.storage = new StorageBridge({
-    basePath: '/BookViewer',
-    storagePrefix: 'bookviewer',
-    ui: true,
-    uiTarget: '#dbx-ui',
-  });
+const THUMB_EXT = new Set(['jpg','jpeg','png','gif','webp','bmp','tiff','tif','ppm']);
+const IMG_EXT = new Set(['jpg','jpeg','png','gif','webp','bmp','tiff','tif','svg']);
+
+// ── Natural Sort ──
+function naturalCmp(a, b) {
+  const an = natChunks(a), bn = natChunks(b);
+  for (let i = 0, len = Math.min(an.length, bn.length); i < len; i++) {
+    const ac = an[i], bc = bn[i];
+    if (ac.n !== null && bc.n !== null) { if (ac.n !== bc.n) return ac.n - bc.n; }
+    else if (ac.n !== null) return -1;
+    else if (bc.n !== null) return 1;
+    else { const c = ac.s.localeCompare(bc.s, 'ja', { sensitivity: 'base' }); if (c) return c; }
+  }
+  return an.length - bn.length;
+}
+function natChunks(s) { const r = [], re = /(\d+)|(\D+)/g; let m; while ((m = re.exec(s))) r.push(m[1] !== undefined ? { n: parseInt(m[1]), s: m[1] } : { n: null, s: m[2] }); return r; }
+
+// ── IndexedDB ──
+const IDB = {
+  db: null,
+  async open() { return new Promise((res, rej) => { const r = indexedDB.open('DropboxFiler', 2); r.onupgradeneeded = e => { const db = e.target.result; ['thumbs','settings','folderPreviews'].forEach(s => { if (!db.objectStoreNames.contains(s)) db.createObjectStore(s); }); }; r.onsuccess = e => { IDB.db = e.target.result; res(); }; r.onerror = () => rej(r.error); }); },
+  async get(s, k) { return new Promise(r => { try { const tx = IDB.db.transaction(s,'readonly'); const q = tx.objectStore(s).get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(); } catch(_) { r(); } }); },
+  async put(s, k, v) { return new Promise(r => { try { const tx = IDB.db.transaction(s,'readwrite'); tx.objectStore(s).put(v, k); tx.oncomplete = () => r(); tx.onerror = () => r(); } catch(_) { r(); } }); },
+};
+
+// ── Dropbox Thumbnail ──
+function dbxArg(o) { return JSON.stringify(o).replace(/[\u0080-\uFFFF]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')); }
+async function fetchThumbnail(p, sz) { const r = await fetch('https://content.dropboxapi.com/2/files/get_thumbnail_v2', { method: 'POST', headers: { 'Authorization': 'Bearer ' + App.storage.getToken(), 'Dropbox-API-Arg': dbxArg({ resource: { '.tag': 'path', path: p }, format: 'jpeg', size: sz || 'w256h256', mode: 'bestfit' }) } }); if (!r.ok) throw new Error(r.status); return r.blob(); }
+
+// ── Helpers ──
+const $ = s => document.querySelector(s);
+function ext(n) { const i = n.lastIndexOf('.'); return i > 0 ? n.slice(i+1).toLowerCase() : ''; }
+function baseName(p) { return p.split('/').pop(); }
+function parentPath(p) { const a = p.split('/'); a.pop(); return a.join('/'); }
+function toast(m) { const e = $('#toast'); e.textContent = m; e.classList.add('show'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('show'), 2200); }
+function entryRelPath(entry) { const a = entry.path_display || entry.path_lower || ''; return a.startsWith('/') ? a.slice(1) : a; }
+
+// ── Thumb Queue ──
+const TQ = { running: 0, max: 6, q: [] };
+function tqRun(fn) { return new Promise((res, rej) => { const exec = () => { TQ.running++; fn().then(res, rej).finally(() => { TQ.running--; if (TQ.q.length) TQ.q.shift()(); }); }; TQ.running < TQ.max ? exec() : TQ.q.push(exec); }); }
+
+// ── Settings Sync (Dropbox + IDB) ──
+const SETTINGS_PATH = 'DropboxFiler-settings.json';
+let settingsSaveTimer = null;
+
+async function loadSettings() {
+  // Try Dropbox first, fall back to IDB
+  let cloud = null;
+  try {
+    const raw = await App.storage.load(SETTINGS_PATH);
+    cloud = JSON.parse(raw);
+  } catch(_) {}
+
+  const local = {
+    thumbSize: await IDB.get('settings','thumbSize'),
+    sortMode: await IDB.get('settings','sortMode'),
+    favorites: await IDB.get('settings','favorites'),
+    lastPath: await IDB.get('settings','lastPath'),
+    sidebarHidden: await IDB.get('settings','sidebarHidden'),
+    customOrders: await IDB.get('settings','customOrders'),
+  };
+
+  // Cloud wins if present, otherwise local
+  const s = cloud || {};
+  const merged = {
+    thumbSize: s.thumbSize ?? local.thumbSize ?? 160,
+    sortMode: s.sortMode ?? local.sortMode ?? 'name_asc',
+    favorites: s.favorites ?? local.favorites ?? [],
+    lastPath: s.lastPath ?? local.lastPath ?? '',
+    sidebarHidden: s.sidebarHidden ?? local.sidebarHidden ?? false,
+    customOrders: s.customOrders ?? local.customOrders ?? {},
+  };
+
+  // Write merged back to IDB
+  IDB.put('settings','thumbSize', merged.thumbSize);
+  IDB.put('settings','sortMode', merged.sortMode);
+  IDB.put('settings','favorites', merged.favorites);
+  IDB.put('settings','lastPath', merged.lastPath);
+  IDB.put('settings','sidebarHidden', merged.sidebarHidden);
+  IDB.put('settings','customOrders', merged.customOrders);
+
+  return merged;
+}
+
+function saveSettings() {
+  // Debounced save to Dropbox
+  clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = setTimeout(async () => {
+    try {
+      const data = {
+        thumbSize: App.thumbSize,
+        sortMode: App.sortMode,
+        favorites: App.favorites,
+        lastPath: App.currentPath,
+        sidebarHidden: $('#sidebar').classList.contains('hidden'),
+        customOrders: App.customOrders || {},
+      };
+      await App.storage.save(SETTINGS_PATH, JSON.stringify(data, null, 2));
+    } catch(e) { console.warn('Settings sync failed:', e); }
+  }, 1500);
+}
+
+function saveSetting(key, value) {
+  IDB.put('settings', key, value);
+  saveSettings();
+}
+
+// ════════════════════════════════════════
+// Init
+// ════════════════════════════════════════
+async function init() {
+  await IDB.open();
+
+  // Load IDB settings for instant display (before Dropbox connects)
+  const localThumb = await IDB.get('settings','thumbSize');
+  if (localThumb) { App.thumbSize = localThumb; $('#thumb-slider').value = localThumb; document.documentElement.style.setProperty('--thumb-size', localThumb); }
+  const localSort = await IDB.get('settings','sortMode');
+  if (localSort) { App.sortMode = localSort; $('#sort-select').value = localSort; }
+  const localFavs = await IDB.get('settings','favorites');
+  if (localFavs) App.favorites = localFavs;
+  const localOrders = await IDB.get('settings','customOrders');
+  App.customOrders = localOrders || {};
+  const localSh = await IDB.get('settings','sidebarHidden');
+  if (localSh) $('#sidebar').classList.add('hidden');
+
+  App.storage = new StorageBridge({ basePath: '', storagePrefix: 'dbxfiler', ui: true, uiTarget: '#dbx-ui' });
 
   App.storage.on('connected', async () => {
-    showScreen('shelf');
-    await loadShelf();
+    $('#connection-screen').style.display = 'none';
+    $('#app').classList.add('active');
+    // Load cloud settings (merge with local)
+    const s = await loadSettings();
+    App.thumbSize = s.thumbSize; $('#thumb-slider').value = s.thumbSize; document.documentElement.style.setProperty('--thumb-size', s.thumbSize);
+    App.sortMode = s.sortMode; $('#sort-select').value = s.sortMode;
+    App.favorites = s.favorites;
+    App.customOrders = s.customOrders || {};
+    if (s.sidebarHidden) $('#sidebar').classList.add('hidden'); else $('#sidebar').classList.remove('hidden');
+    renderFavorites();
+    await navigate(pathFromHash() ?? s.lastPath ?? '', true);
   });
-
-  App.storage.on('disconnected', () => {
-    showScreen('connection');
-  });
-
-  // Check if already connected
+  App.storage.on('disconnected', () => { $('#connection-screen').style.display = ''; $('#app').classList.remove('active'); });
   if (App.storage.isConnected) {
-    showScreen('shelf');
-    loadShelf();
+    $('#connection-screen').style.display = 'none'; $('#app').classList.add('active');
+    const s = await loadSettings();
+    App.thumbSize = s.thumbSize; $('#thumb-slider').value = s.thumbSize; document.documentElement.style.setProperty('--thumb-size', s.thumbSize);
+    App.sortMode = s.sortMode; $('#sort-select').value = s.sortMode;
+    App.favorites = s.favorites;
+    App.customOrders = s.customOrders || {};
+    if (s.sidebarHidden) $('#sidebar').classList.add('hidden'); else $('#sidebar').classList.remove('hidden');
+    renderFavorites();
+    navigate(pathFromHash() ?? s.lastPath ?? '', true);
   }
+  setupEvents();
+}
 
-  // Event listeners
+// ── History ──
+function pathFromHash() { const h = location.hash; if (!h || h === '#') return null; try { return decodeURIComponent(h.slice(1)); } catch(_) { return null; } }
+function pushHash(p) { const h = '#' + encodeURIComponent(p); if (location.hash !== h) history.pushState(null, '', h); }
+function replaceHash(p) { history.replaceState(null, '', '#' + encodeURIComponent(p)); }
+
+// ── Navigation ──
+async function navigate(path, replace) {
+  path = (path || '').replace(/^\/+|\/+$/g, '');
+  App.currentPath = path; App.selected.clear(); updateSelBadge();
+  saveSetting('lastPath', path);
+  replace ? replaceHash(path) : pushHash(path);
+  $('#btn-up').classList.toggle('disabled', !path);
+  renderBreadcrumb(); renderFavorites();
+  await loadFolder(path);
+}
+
+async function loadFolder(path) {
+  const gen = ++App.navGen; const grid = $('#grid'); const ld = $('#loading-overlay');
+  grid.innerHTML = ''; ld.classList.add('active');
+  try {
+    const entries = await App.storage.list(path || '');
+    if (gen !== App.navGen) return;
+    App.entries = sortEntries(entries);
+    App.entries = applyCustomOrder(App.entries);
+    App.selected.clear(); updateSelBadge();
+    renderGrid(gen);
+  } catch(e) { if (gen === App.navGen) grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">⚠</div><div>読み込みエラー</div></div>'; }
+  finally { if (gen === App.navGen) ld.classList.remove('active'); }
+}
+
+function sortEntries(entries) {
+  const folders = entries.filter(e => e['.tag'] === 'folder');
+  const files = entries.filter(e => e['.tag'] === 'file');
+  const cmp = (a, b) => { switch (App.sortMode) {
+    case 'name_asc': return naturalCmp(a.name, b.name);
+    case 'name_desc': return naturalCmp(b.name, a.name);
+    case 'date_desc': return (b.client_modified||'').localeCompare(a.client_modified||'');
+    case 'date_asc': return (a.client_modified||'').localeCompare(b.client_modified||'');
+    case 'size_desc': return (b.size||0) - (a.size||0);
+    case 'size_asc': return (a.size||0) - (b.size||0);
+    default: return 0; }};
+  folders.sort((a, b) => naturalCmp(a.name, b.name)); files.sort(cmp);
+  return [...folders, ...files];
+}
+
+function renderBreadcrumb() {
+  const parts = App.currentPath ? App.currentPath.split('/') : [];
+  let h = `<span class="bc-item${!parts.length ? ' current' : ''}" data-path="">Dropbox</span>`, acc = '';
+  for (let i = 0; i < parts.length; i++) { acc += (acc ? '/' : '') + parts[i]; h += `<span class="bc-sep">›</span><span class="bc-item${i===parts.length-1?' current':''}" data-path="${acc}">${parts[i]}</span>`; }
+  const bc = $('#breadcrumb'); bc.innerHTML = h; bc.scrollLeft = bc.scrollWidth;
+}
+
+// ── Grid ──
+function renderGrid(gen) {
+  const grid = $('#grid'); const entries = App.entries;
+  if (!entries.length) { grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📂</div><div>空のフォルダ</div></div>'; return; }
+  grid.innerHTML = entries.map((entry, idx) => {
+    const isF = entry['.tag'] === 'folder', e = ext(entry.name), sel = App.selected.has(idx);
+    const draggable = !isF ? ' draggable="true"' : '';
+    return `<div class="grid-item${sel ? ' selected' : ''}" data-index="${idx}" data-tag="${entry['.tag']}"${draggable}>
+      <div class="grid-check" data-check="${idx}">${sel ? '✓' : ''}</div>
+      <div class="grid-thumb" id="thumb-${idx}">${isF ? '<span class="folder-icon">📁</span>' : (THUMB_EXT.has(e) ? '<div class="loading-spinner"></div>' : '<span class="file-icon">📄</span>')}</div>
+      <div class="grid-name" title="${entry.name}">${entry.name}</div></div>`;
+  }).join('');
+  setupObserver(gen); loadFolderPreviews(gen);
+}
+
+// ── Selection ──
+function toggleSelect(idx, multi, range) {
+  if (range && App._lastClickIdx !== undefined) {
+    const lo = Math.min(App._lastClickIdx, idx), hi = Math.max(App._lastClickIdx, idx);
+    for (let i = lo; i <= hi; i++) App.selected.add(i);
+  } else if (multi) {
+    App.selected.has(idx) ? App.selected.delete(idx) : App.selected.add(idx);
+  } else {
+    if (App.selected.size === 1 && App.selected.has(idx)) App.selected.clear();
+    else { App.selected.clear(); App.selected.add(idx); }
+  }
+  App._lastClickIdx = idx;
+  updateSelectionUI();
+}
+function selectAll() { App.entries.forEach((_, i) => App.selected.add(i)); updateSelectionUI(); }
+function clearSelection() { App.selected.clear(); updateSelectionUI(); }
+function updateSelectionUI() {
+  document.querySelectorAll('.grid-item').forEach(el => {
+    const idx = parseInt(el.dataset.index), sel = App.selected.has(idx);
+    el.classList.toggle('selected', sel);
+    const chk = el.querySelector('.grid-check');
+    if (chk) chk.textContent = sel ? '✓' : '';
+  });
+  updateSelBadge();
+}
+function updateSelBadge() {
+  const b = $('#sel-badge'), n = App.selected.size;
+  b.textContent = n + '件選択'; b.classList.toggle('show', n > 0);
+}
+function selectedFileEntries() {
+  return [...App.selected].sort((a,b) => a - b).map(i => App.entries[i]).filter(e => e && e['.tag'] === 'file');
+}
+
+// ── Thumb Observer ──
+let observer = null;
+function setupObserver(gen) {
+  if (observer) observer.disconnect();
+  observer = new IntersectionObserver(ios => { for (const io of ios) { if (io.isIntersecting) { loadThumb(parseInt(io.target.dataset.index), gen); observer.unobserve(io.target); } } }, { root: $('#main'), rootMargin: '300px' });
+  document.querySelectorAll('.grid-item[data-tag="file"]').forEach(el => { const i = parseInt(el.dataset.index); if (App.entries[i] && THUMB_EXT.has(ext(App.entries[i].name))) observer.observe(el); });
+}
+async function loadThumb(idx, gen) {
+  const entry = App.entries[idx]; if (!entry) return;
+  const ck = entry.path_lower + ':' + (entry.content_hash || '');
+  if (App.thumbCache[ck]) { setThumbImg(idx, gen, App.thumbCache[ck]); return; }
+  const cached = await IDB.get('thumbs', ck);
+  if (cached) { const u = URL.createObjectURL(new Blob([cached], { type: 'image/jpeg' })); App.thumbCache[ck] = u; setThumbImg(idx, gen, u); return; }
+  tqRun(async () => { const blob = await fetchThumbnail(entry.path_display || entry.path_lower); const buf = await blob.arrayBuffer(); const u = URL.createObjectURL(new Blob([buf], { type: 'image/jpeg' })); App.thumbCache[ck] = u; IDB.put('thumbs', ck, buf); setThumbImg(idx, gen, u); }).catch(() => { if (gen === App.navGen) { const el = document.getElementById('thumb-' + idx); if (el) el.innerHTML = '<span class="file-icon">🖼</span>'; } });
+}
+function setThumbImg(idx, gen, u) { if (gen !== App.navGen) return; const el = document.getElementById('thumb-' + idx); if (el) el.innerHTML = `<img src="${u}" alt="">`; }
+
+// ── Folder Previews ──
+async function loadFolderPreviews(gen) {
+  for (const [i, e] of App.entries.entries()) {
+    if (e['.tag'] !== 'folder' || gen !== App.navGen) continue;
+    const cached = await IDB.get('folderPreviews', e.path_lower);
+    if (cached && cached.length) { renderFP(i, gen, cached); continue; }
+    loadOneFP(e, i, gen);
+  }
+}
+async function loadOneFP(entry, idx, gen) {
+  try {
+    const ch = await App.storage.list(entryRelPath(entry)); if (gen !== App.navGen) return;
+    const imgs = ch.filter(c => c['.tag'] === 'file' && THUMB_EXT.has(ext(c.name))).slice(0, 4);
+    if (!imgs.length) return;
+    const urls = [];
+    for (const img of imgs) { if (gen !== App.navGen) return; try { urls.push(URL.createObjectURL(await tqRun(() => fetchThumbnail(img.path_display || img.path_lower, 'w128h128')))); } catch(_) {} }
+    if (urls.length && gen === App.navGen) {
+      const bufs = []; for (const u of urls) try { bufs.push(await (await fetch(u)).arrayBuffer()); } catch(_) {}
+      if (bufs.length) IDB.put('folderPreviews', entry.path_lower, bufs);
+      renderFP(idx, gen, urls);
+    }
+  } catch(_) {}
+}
+function renderFP(idx, gen, data) {
+  if (gen !== App.navGen) return; const el = document.getElementById('thumb-' + idx); if (!el) return;
+  const urls = data.map(u => typeof u === 'string' ? u : URL.createObjectURL(new Blob([u], { type: 'image/jpeg' })));
+  let cells = ''; for (let i = 0; i < 4; i++) cells += urls[i] ? `<div class="fp-cell"><img src="${urls[i]}" alt=""></div>` : '<div class="fp-cell"><span class="fp-empty">·</span></div>';
+  el.innerHTML = `<div class="folder-preview">${cells}<div class="folder-badge">📁</div></div>`;
+}
+
+// ── Favorites ──
+function renderFavorites() {
+  const l = $('#fav-list');
+  if (!App.favorites.length) { l.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:11.5px;text-align:center">お気に入りなし</div>'; return; }
+  l.innerHTML = App.favorites.map((f, i) => `<div class="fav-item${App.currentPath===f.path?' active':''}" data-path="${f.path}" data-index="${i}"><span class="fav-icon">📁</span><span class="fav-name" title="${f.path||'ルート'}">${f.name}</span><button class="fav-remove" data-index="${i}" title="削除">✕</button></div>`).join('');
+}
+function addFavorite(p) { if (App.favorites.some(f => f.path === p)) { toast('追加済み'); return; } App.favorites.push({ path: p, name: p ? baseName(p) : 'ルート' }); saveSetting('favorites', App.favorites); renderFavorites(); toast('お気に入りに追加'); }
+function removeFavorite(i) { App.favorites.splice(i, 1); saveSetting('favorites', App.favorites); renderFavorites(); }
+
+// ── Context Menu ──
+let ctxTarget = null, ctxIsMulti = false;
+function showCtx(x, y, entry, multi) {
+  ctxTarget = entry; ctxIsMulti = multi;
+  const m = $('#ctx-menu'), isF = entry['.tag'] === 'folder', e = ext(entry.name);
+  let h = '';
+  if (multi) {
+    const count = App.selected.size;
+    h += `<div class="ctx-item" style="color:var(--text-muted);pointer-events:none;font-size:11.5px">${count}件選択中</div><div class="ctx-sep"></div>`;
+    h += '<div class="ctx-item" data-action="batch-rename"><span class="ctx-icon">🔢</span>連番リネーム</div>';
+    h += '<div class="ctx-item danger" data-action="delete-multi"><span class="ctx-icon">🗑</span>まとめて削除</div>';
+  } else {
+    if (isF) { h += '<div class="ctx-item" data-action="open"><span class="ctx-icon">📂</span>開く</div><div class="ctx-item" data-action="fav"><span class="ctx-icon">⭐</span>お気に入りに追加</div><div class="ctx-sep"></div>'; }
+    else if (IMG_EXT.has(e)) { h += '<div class="ctx-item" data-action="view"><span class="ctx-icon">🖼</span>画像を開く</div><div class="ctx-sep"></div>'; }
+    h += '<div class="ctx-item" data-action="rename"><span class="ctx-icon">✏</span>名前の変更</div>';
+    h += '<div class="ctx-item danger" data-action="delete"><span class="ctx-icon">🗑</span>削除</div>';
+  }
+  m.innerHTML = h; m.style.left = Math.min(x, innerWidth - 200) + 'px'; m.style.top = Math.min(y, innerHeight - 200) + 'px'; m.classList.add('show');
+}
+function hideCtx() { $('#ctx-menu').classList.remove('show'); ctxTarget = null; ctxIsMulti = false; }
+
+async function doCtx(action) {
+  const entry = ctxTarget; hideCtx();
+  if (action === 'open') navigate(entryRelPath(entry));
+  else if (action === 'view') openViewer(entry);
+  else if (action === 'fav') addFavorite(entryRelPath(entry));
+  else if (action === 'rename') showRenameModal(entry);
+  else if (action === 'delete') await deleteEntry(entry);
+  else if (action === 'batch-rename') openBatchRename();
+  else if (action === 'delete-multi') await deleteMulti();
+}
+
+// ── Rename (single) ──
+let renameTarget = null;
+function showRenameModal(entry) { renameTarget = entry; const inp = $('#rename-input'); inp.value = entry['.tag'] === 'folder' ? entry.name : entry.name.replace(/\.[^.]+$/, ''); $('#modal-rename').classList.add('show'); setTimeout(() => { inp.focus(); inp.select(); }, 50); }
+async function execRename() {
+  if (!renameTarget) return; const entry = renameTarget, raw = $('#rename-input').value.trim(); if (!raw) return;
+  const e = ext(entry.name), fin = (entry['.tag'] === 'file' && e) ? raw + '.' + e : raw;
+  if (fin === entry.name) { $('#modal-rename').classList.remove('show'); return; }
+  const rel = entryRelPath(entry), par = parentPath(rel), nr = par ? par + '/' + fin : fin;
+  try { await App.storage.move(rel, nr); toast('名前を変更しました'); $('#modal-rename').classList.remove('show'); loadFolder(App.currentPath); } catch(e) { toast('エラー: ' + e.message); }
+}
+
+// ── Delete ──
+async function deleteEntry(entry) { if (!confirm(`「${entry.name}」を削除しますか？`)) return; try { await App.storage.delete(entryRelPath(entry)); toast('削除しました'); loadFolder(App.currentPath); } catch(e) { toast('削除エラー: ' + e.message); } }
+async function deleteMulti() {
+  const sel = [...App.selected].map(i => App.entries[i]).filter(Boolean);
+  if (!sel.length || !confirm(`${sel.length}件を削除しますか？`)) return;
+  let ok = 0, fail = 0;
+  for (const e of sel) { try { await App.storage.delete(entryRelPath(e)); ok++; } catch(_) { fail++; } }
+  toast(fail ? `${ok}件削除（${fail}件エラー）` : `${ok}件削除しました`);
+  loadFolder(App.currentPath);
+}
+
+// ── Batch Rename ──
+function openBatchRename() {
+  const files = selectedFileEntries(); if (!files.length) { toast('ファイルを選択してください'); return; }
+  $('#batch-count').textContent = files.length;
+  $('#preset-select').value = 'nnn'; $('#prefix-input').value = ''; $('#custom-input').value = '';
+  $('#prefix-row').style.display = 'none'; $('#custom-row').style.display = 'none';
+  updateRenamePreview(); $('#modal-batch-rename').classList.add('show');
+}
+function updateRenamePreview() {
+  const files = selectedFileEntries(), preset = $('#preset-select').value, prefix = $('#prefix-input').value.trim(), custom = $('#custom-input').value.trim();
+  const names = files.map((f, i) => { const e = ext(f.name), n = i + 1; switch(preset) {
+    case 'nnn': return pad(n,3)+(e?'.'+e:''); case 'nn': return pad(n,2)+(e?'.'+e:'');
+    case 'prefix_nnn': return (prefix||'file')+'_'+pad(n,3)+(e?'.'+e:'');
+    case 'custom': return applyCust(custom,n,e,f.name); default: return f.name; }});
+  $('#rename-preview').innerHTML = files.map((f,i) => `<div class="rp-row"><span class="rp-old">${f.name}</span><span class="rp-arrow">→</span><span class="rp-new">${names[i]}</span></div>`).join('');
+}
+function pad(n, d) { return String(n).padStart(d, '0'); }
+function applyCust(p, n, e, orig) { return (p||orig).replace('{NNN}',pad(n,3)).replace('{NN}',pad(n,2)).replace('{N}',n).replace('{ext}',e).replace('{name}',orig.replace(/\.[^.]+$/,'')); }
+
+async function executeBatchRename() {
+  const files = selectedFileEntries(), preset = $('#preset-select').value, prefix = $('#prefix-input').value.trim(), custom = $('#custom-input').value.trim();
+  const names = files.map((f,i) => { const e = ext(f.name), n = i+1; switch(preset) {
+    case 'nnn': return pad(n,3)+(e?'.'+e:''); case 'nn': return pad(n,2)+(e?'.'+e:'');
+    case 'prefix_nnn': return (prefix||'file')+'_'+pad(n,3)+(e?'.'+e:'');
+    case 'custom': return applyCust(custom,n,e,f.name); default: return f.name; }});
+  const renames = files.map((f,i) => ({ entry: f, newName: names[i] })).filter(r => r.entry.name !== r.newName);
+  if (!renames.length) { toast('変更なし'); return; }
+  if (!confirm(`${renames.length}件リネームしますか？`)) return;
+  $('#modal-batch-rename').classList.remove('show'); toast('リネーム中...');
+  const undo = []; let fail = 0;
+  // Pass 1: to temp
+  for (let i = 0; i < renames.length; i++) {
+    const r = renames[i], rel = entryRelPath(r.entry), par = parentPath(rel);
+    const tmp = (par ? par + '/' : '') + '__tmp_' + i + '_' + r.newName;
+    try { await App.storage.move(rel, tmp); r._tmp = tmp; undo.push({ from: null, origRel: rel }); } catch(_) { fail++; r._tmp = null; }
+  }
+  // Pass 2: to final
+  for (let i = 0; i < renames.length; i++) {
+    if (!renames[i]._tmp) continue;
+    const par = parentPath(renames[i]._tmp), fin = (par ? par + '/' : '') + renames[i].newName;
+    try { await App.storage.move(renames[i]._tmp, fin); undo[i].from = fin; } catch(_) { fail++; }
+  }
+  App.undoHistory = { entries: undo.filter(u => u.from) }; updateUndoBtn();
+  toast(fail ? `完了（${fail}件エラー）` : `${renames.length}件リネーム完了`);
+  loadFolder(App.currentPath);
+}
+function updateUndoBtn() { $('#btn-undo').style.display = (App.undoHistory?.entries?.length) ? '' : 'none'; }
+async function undoRename() {
+  const ents = App.undoHistory?.entries; if (!ents?.length || !confirm(`${ents.length}件のリネームを元に戻しますか？`)) return;
+  toast('元に戻しています...'); let fail = 0;
+  for (let i = 0; i < ents.length; i++) { const par = parentPath(ents[i].from), tmp = (par?par+'/':'') + '__undo_'+i+'_'+baseName(ents[i].origRel); try { await App.storage.move(ents[i].from, tmp); ents[i]._tmp = tmp; } catch(_) { fail++; ents[i]._tmp = null; } }
+  for (let i = 0; i < ents.length; i++) { if (!ents[i]._tmp) continue; try { await App.storage.move(ents[i]._tmp, ents[i].origRel); } catch(_) { fail++; } }
+  App.undoHistory = null; updateUndoBtn();
+  toast(fail ? `元に戻す完了（${fail}件エラー）` : '元に戻しました'); loadFolder(App.currentPath);
+}
+
+// ── D&D Reorder (always-on for files) ──
+let dragSrcIdx = null;
+function initDragReorder() {
+  const grid = $('#grid');
+  grid.addEventListener('dragstart', e => {
+    const item = e.target.closest('.grid-item[data-tag="file"]'); if (!item) { e.preventDefault(); return; }
+    dragSrcIdx = parseInt(item.dataset.index);
+    // If dragging a selected item, drag all selected; otherwise just this one
+    if (!App.selected.has(dragSrcIdx)) { App.selected.clear(); App.selected.add(dragSrcIdx); updateSelectionUI(); }
+    item.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', '');
+  });
+  grid.addEventListener('dragend', e => { document.querySelectorAll('.dragging,.drag-over-before,.drag-over-after').forEach(el => el.classList.remove('dragging','drag-over-before','drag-over-after')); dragSrcIdx = null; });
+  grid.addEventListener('dragover', e => {
+    if (dragSrcIdx === null) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    const item = e.target.closest('.grid-item[data-tag="file"]'); if (!item) return;
+    document.querySelectorAll('.drag-over-before,.drag-over-after').forEach(el => el.classList.remove('drag-over-before','drag-over-after'));
+    const rect = item.getBoundingClientRect();
+    (e.clientX < rect.left + rect.width/2) ? item.classList.add('drag-over-before') : item.classList.add('drag-over-after');
+  });
+  grid.addEventListener('drop', e => {
+    e.preventDefault(); if (dragSrcIdx === null) return;
+    const item = e.target.closest('.grid-item[data-tag="file"]'); if (!item) return;
+    const dropIdx = parseInt(item.dataset.index);
+    const rect = item.getBoundingClientRect(), before = e.clientX < rect.left + rect.width/2;
+    reorderEntries(dropIdx, before);
+    document.querySelectorAll('.drag-over-before,.drag-over-after').forEach(el => el.classList.remove('drag-over-before','drag-over-after'));
+  });
+
+  // Touch D&D
+  let tSrc = null, tClone = null, tLP = null;
+  grid.addEventListener('touchstart', e => {
+    const item = e.target.closest('.grid-item[data-tag="file"]'); if (!item) return;
+    tLP = setTimeout(() => {
+      tSrc = parseInt(item.dataset.index);
+      if (!App.selected.has(tSrc)) { App.selected.clear(); App.selected.add(tSrc); updateSelectionUI(); }
+      App._touchDragging = true;
+      item.classList.add('dragging');
+      tClone = item.cloneNode(true); tClone.className = 'touch-drag-clone';
+      tClone.style.width = item.offsetWidth + 'px'; tClone.style.height = item.offsetHeight + 'px';
+      document.body.appendChild(tClone); posC(e.touches[0]);
+    }, 400);
+  }, { passive: true });
+  grid.addEventListener('touchmove', e => {
+    if (tClone) { e.preventDefault(); posC(e.touches[0]);
+      document.querySelectorAll('.drag-over-before,.drag-over-after').forEach(el => el.classList.remove('drag-over-before','drag-over-after'));
+      const under = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY)?.closest('.grid-item[data-tag="file"]');
+      if (under) { const r = under.getBoundingClientRect(); (e.touches[0].clientX < r.left+r.width/2) ? under.classList.add('drag-over-before') : under.classList.add('drag-over-after'); }
+    } else clearTimeout(tLP);
+  }, { passive: false });
+  grid.addEventListener('touchend', e => {
+    clearTimeout(tLP);
+    if (tClone && tSrc !== null) {
+      const under = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY)?.closest('.grid-item[data-tag="file"]');
+      if (under) { const di = parseInt(under.dataset.index), r = under.getBoundingClientRect(); if (di !== tSrc) reorderEntries(di, e.changedTouches[0].clientX < r.left + r.width/2); }
+      tClone.remove(); tClone = null;
+      document.querySelectorAll('.dragging,.drag-over-before,.drag-over-after').forEach(el => el.classList.remove('dragging','drag-over-before','drag-over-after'));
+      tSrc = null; App._touchDragging = false;
+    }
+  });
+  function posC(t) { if (tClone) { tClone.style.left = (t.clientX-40)+'px'; tClone.style.top = (t.clientY-40)+'px'; } }
+}
+
+function reorderEntries(dropIdx, before) {
+  const selIndices = [...App.selected].filter(i => App.entries[i]?.['.tag'] === 'file').sort((a,b) => a - b);
+  if (!selIndices.length) return;
+  // If dropping onto a selected item, do nothing
+  if (selIndices.includes(dropIdx)) return;
+  const dragged = selIndices.map(i => App.entries[i]);
+  const dropEntry = App.entries[dropIdx];
+  const remaining = App.entries.filter((_, i) => !selIndices.includes(i));
+  let insertAt = remaining.indexOf(dropEntry);
+  if (insertAt === -1) insertAt = remaining.length;
+  if (!before) insertAt++;
+  remaining.splice(insertAt, 0, ...dragged);
+  App.entries = remaining;
+  App.selected.clear();
+  dragged.forEach(d => { const ni = App.entries.indexOf(d); if (ni >= 0) App.selected.add(ni); });
+  saveCustomOrder();
+  renderGrid(App.navGen);
+}
+
+// ── Custom order persistence ──
+function customOrderKey() { return App.currentPath || '/'; }
+function saveCustomOrder() {
+  const names = App.entries.map(e => e.name);
+  if (!App.customOrders) App.customOrders = {};
+  App.customOrders[customOrderKey()] = names;
+  saveSetting('customOrders', App.customOrders);
+}
+function applyCustomOrder(entries) {
+  const saved = App.customOrders?.[customOrderKey()];
+  if (!saved || !saved.length) return entries;
+  const byName = new Map();
+  entries.forEach(e => byName.set(e.name, e));
+  const ordered = [], used = new Set();
+  for (const name of saved) {
+    if (byName.has(name) && !used.has(name)) { ordered.push(byName.get(name)); used.add(name); }
+  }
+  for (const e of entries) { if (!used.has(e.name)) ordered.push(e); }
+  return ordered;
+}
+
+// ── Image Viewer ──
+function openViewer(entry) {
+  App.viewerImages = App.entries.filter(e => e['.tag'] === 'file' && IMG_EXT.has(ext(e.name)));
+  const idx = App.viewerImages.indexOf(entry); if (idx === -1) return;
+  App.viewerIndex = idx; App.viewerVisible = true;
+  const img = $('#viewer-img'); img.removeAttribute('src'); img.classList.add('loading');
+  $('#viewer').classList.add('active'); showViewerBar(); loadViewerPage(idx); updateVSlider();
+  history.pushState({ viewer: true }, '', location.hash);
+}
+function closeViewer() { if (!App.viewerVisible) return; App.viewerVisible = false; $('#viewer').classList.remove('active'); $('#viewer-img').removeAttribute('src'); for (const u of Object.values(App.prefetchCache)) URL.revokeObjectURL(u); App.prefetchCache = {}; }
+let vGen = 0;
+async function loadViewerPage(idx) {
+  if (idx < 0 || idx >= App.viewerImages.length) return;
+  App.viewerIndex = idx; const entry = App.viewerImages[idx], rel = entryRelPath(entry), img = $('#viewer-img'), g = ++vGen;
+  $('#viewer-title').textContent = entry.name; updateVSlider(); img.removeAttribute('src'); img.classList.add('loading');
+  try { let u = App.prefetchCache[rel]; if (!u) { const buf = await App.storage.loadBinary(rel); if (g !== vGen) return; const e = ext(entry.name), mime = e === 'svg' ? 'image/svg+xml' : 'image/'+(e==='jpg'?'jpeg':e); u = URL.createObjectURL(new Blob([buf], { type: mime })); }
+    if (g !== vGen) return; img.src = u; img.onload = () => { if (g === vGen) img.classList.remove('loading'); };
+  } catch(_) { if (g === vGen) img.classList.remove('loading'); }
+  prefetchV(idx);
+}
+async function prefetchV(cur) { for (const off of [1,-1,2,-2,3,-3]) { const i = cur+off; if (i<0||i>=App.viewerImages.length) continue; const rel = entryRelPath(App.viewerImages[i]); if (App.prefetchCache[rel]) continue; try { const buf = await App.storage.loadBinary(rel); const e = ext(App.viewerImages[i].name), mime = e==='svg'?'image/svg+xml':'image/'+(e==='jpg'?'jpeg':e); App.prefetchCache[rel] = URL.createObjectURL(new Blob([buf], { type: mime })); } catch(_) {} } }
+function vPrev() { if (App.viewerIndex > 0) loadViewerPage(App.viewerIndex - 1); }
+function vNext() { if (App.viewerIndex < App.viewerImages.length - 1) loadViewerPage(App.viewerIndex + 1); }
+function updateVSlider() { const s = $('#viewer-slider'); s.max = App.viewerImages.length-1; s.value = App.viewerIndex; $('#viewer-page-label').textContent = `${App.viewerIndex+1} / ${App.viewerImages.length}`; }
+function showViewerBar() { $('#viewer-topbar').classList.add('visible'); $('#viewer-bottombar').classList.add('visible'); clearTimeout(App.toolbarTimer); App.toolbarTimer = setTimeout(() => { if (App.viewerVisible) { $('#viewer-topbar').classList.remove('visible'); $('#viewer-bottombar').classList.remove('visible'); } }, 3000); }
+
+// ════════════════════════════════════════
+// Events
+// ════════════════════════════════════════
+function setupEvents() {
+  $('#btn-back').onclick = () => history.back();
+  $('#btn-forward').onclick = () => history.forward();
+  $('#btn-up').onclick = () => { if (App.currentPath) navigate(parentPath(App.currentPath)); };
+  $('#btn-refresh').onclick = () => loadFolder(App.currentPath);
   $('#btn-disconnect').onclick = () => App.storage.disconnect();
-  $('#btn-refresh').onclick = () => loadShelf();
-  $('#btn-new-list').onclick = () => showModal('modal-new-list');
-  $('#modal-cancel').onclick = () => hideModal('modal-new-list');
-  $('#modal-create').onclick = createNewList;
-  $('#input-list-name').onkeydown = (e) => { if (e.key === 'Enter') createNewList(); };
+  $('#btn-sidebar').onclick = () => { const sb = $('#sidebar'), mob = innerWidth <= 700; if (mob) sb.classList.toggle('mobile-open'); else { sb.classList.toggle('hidden'); saveSetting('sidebarHidden', sb.classList.contains('hidden')); } };
+  $('#btn-select-all').onclick = selectAll;
+  $('#btn-undo').onclick = undoRename;
 
-  // Reader controls
-  $('#reader-back').onclick = closeReader;
-  $('#tap-left').onclick = () => tapNav('left');
-  $('#tap-right').onclick = () => tapNav('right');
-  $('#tap-center').onclick = toggleToolbar;
-  $('#reader-slider').oninput = onSliderChange;
-  $('#reader-binding-btn').onclick = toggleBinding;
+  $('#breadcrumb').addEventListener('click', e => { const item = e.target.closest('.bc-item'); if (item && !item.classList.contains('current')) navigate(item.dataset.path); });
+  $('#sort-select').onchange = e => { App.sortMode = e.target.value; saveSetting('sortMode', App.sortMode); if (App.customOrders) { delete App.customOrders[customOrderKey()]; saveSetting('customOrders', App.customOrders); } App.entries = sortEntries(App.entries); renderGrid(App.navGen); };
+  $('#thumb-slider').oninput = e => { App.thumbSize = parseInt(e.target.value); document.documentElement.style.setProperty('--thumb-size', App.thumbSize); saveSetting('thumbSize', App.thumbSize); };
+  $('#btn-add-fav').onclick = () => addFavorite(App.currentPath);
+  $('#fav-list').addEventListener('click', e => { const rm = e.target.closest('.fav-remove'); if (rm) { removeFavorite(parseInt(rm.dataset.index)); return; } const item = e.target.closest('.fav-item'); if (item) { navigate(item.dataset.path); $('#sidebar').classList.remove('mobile-open'); } });
 
-  // Spread mode
-  $('#reader-spread-btn').onclick = toggleSpread;
+  // Grid click — desktop: dblclick opens, click selects. Mobile: tap opens, checkbox selects.
+  const isTouchDevice = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  let lastTapT = 0, lastTapEl = null;
+  $('#grid').addEventListener('click', e => {
+    if (lassoState?.prevented) return;
+    
+    const chk = e.target.closest('.grid-check');
+    if (chk) { e.stopPropagation(); toggleSelect(parseInt(chk.dataset.check), true, false); return; }
 
-  // Bookmark controls
-  $('#reader-bookmark-btn').onclick = toggleCurrentBookmark;
-  $('#reader-bm-list-btn').onclick = toggleBmPanel;
-  $('#bm-panel-close').onclick = () => closeBmPanel();
+    const item = e.target.closest('.grid-item'); if (!item) { if (!lassoState?.prevented) clearSelection(); return; }
+    const idx = parseInt(item.dataset.index);
+
+    if (isTouchDevice()) {
+      // Mobile: single tap opens folder/image
+      handleOpen(item);
+    } else {
+      // Desktop: double-click opens, single click selects
+      const now = Date.now();
+      if (now - lastTapT < 350 && lastTapEl === item) { handleOpen(item); lastTapT = 0; return; }
+      lastTapT = now; lastTapEl = item;
+      toggleSelect(idx, e.ctrlKey || e.metaKey, e.shiftKey);
+    }
+  });
+
+  // Rubber-band (lasso) selection — starts anywhere in main, threshold 5px
+  let lassoState = null; // { startX, startY, active, prevented }
+  $('#main').addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    // Don't lasso from checkbox or during viewer
+    if (e.target.closest('.grid-check') || App.viewerVisible) return;
+    lassoState = { startX: e.clientX, startY: e.clientY, active: false, prevented: false, ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey };
+  });
+  document.addEventListener('mousemove', e => {
+    if (!lassoState) return;
+    const dx = e.clientX - lassoState.startX, dy = e.clientY - lassoState.startY;
+    // Threshold: start lasso after 5px movement
+    if (!lassoState.active) {
+      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      lassoState.active = true;
+      if (!lassoState.ctrl && !lassoState.shift) { App.selected.clear(); updateSelectionUI(); }
+      $('#lasso').style.display = 'block';
+    }
+    const el = $('#lasso');
+    const x1 = Math.min(lassoState.startX, e.clientX), y1 = Math.min(lassoState.startY, e.clientY);
+    const x2 = Math.max(lassoState.startX, e.clientX), y2 = Math.max(lassoState.startY, e.clientY);
+    el.style.left = x1 + 'px'; el.style.top = y1 + 'px';
+    el.style.width = (x2 - x1) + 'px'; el.style.height = (y2 - y1) + 'px';
+    // Hit test grid items
+    document.querySelectorAll('.grid-item').forEach(item => {
+      const r = item.getBoundingClientRect();
+      const idx = parseInt(item.dataset.index);
+      const hit = !(r.right < x1 || r.left > x2 || r.bottom < y1 || r.top > y2);
+      if (hit) App.selected.add(idx);
+      else if (!lassoState.ctrl) App.selected.delete(idx);
+    });
+    updateSelectionUI();
+  });
+  document.addEventListener('mouseup', () => {
+    if (lassoState?.active) {
+      // Suppress the click that would fire right after
+      lassoState.prevented = true;
+      setTimeout(() => { lassoState = null; }, 10);
+    } else {
+      lassoState = null;
+    }
+    $('#lasso').style.display = 'none';
+  });
+  // Suppress HTML5 dragstart while lasso is active
+  $('#grid').addEventListener('dragstart', e => {
+    if (lassoState?.active) { e.preventDefault(); return; }
+  }, true);
+  $('#grid').addEventListener('dblclick', e => { if (e.target.closest('.grid-check') || lassoState?.prevented) return; const item = e.target.closest('.grid-item'); if (item) handleOpen(item); });
+
+  // Context menu
+  $('#grid').addEventListener('contextmenu', e => {
+    const item = e.target.closest('.grid-item'); if (!item) return; e.preventDefault();
+    const idx = parseInt(item.dataset.index), entry = App.entries[idx]; if (!entry) return;
+    // If right-clicking a selected item with multi-selection, show multi menu
+    if (App.selected.has(idx) && App.selected.size > 1) { showCtx(e.clientX, e.clientY, entry, true); }
+    else { if (!App.selected.has(idx)) { App.selected.clear(); App.selected.add(idx); updateSelectionUI(); } showCtx(e.clientX, e.clientY, entry, false); }
+  });
+  // Long press (mobile)
+  let lpT = null;
+  $('#grid').addEventListener('touchstart', e => {
+    const item = e.target.closest('.grid-item'); if (!item) return;
+    lpT = setTimeout(() => {
+      const idx = parseInt(item.dataset.index), entry = App.entries[idx]; if (!entry) return;
+      if (App.selected.has(idx) && App.selected.size > 1) showCtx(e.touches[0].clientX, e.touches[0].clientY, entry, true);
+      else { if (!App.selected.has(idx)) { App.selected.clear(); App.selected.add(idx); updateSelectionUI(); } showCtx(e.touches[0].clientX, e.touches[0].clientY, entry, false); }
+    }, 500);
+  }, { passive: true });
+  $('#grid').addEventListener('touchend', () => clearTimeout(lpT));
+  $('#grid').addEventListener('touchmove', () => clearTimeout(lpT));
+
+  document.addEventListener('click', e => { if (!e.target.closest('#ctx-menu')) hideCtx(); });
+  $('#ctx-menu').addEventListener('click', e => { const item = e.target.closest('.ctx-item'); if (item) doCtx(item.dataset.action); });
+
+  // Rename modal
+  $('#rename-ok').onclick = execRename; $('#rename-cancel').onclick = () => $('#modal-rename').classList.remove('show');
+  $('#rename-input').addEventListener('keydown', e => { if (e.key==='Enter') execRename(); if (e.key==='Escape') $('#modal-rename').classList.remove('show'); });
+
+  // Batch rename modal
+  $('#batch-cancel').onclick = () => $('#modal-batch-rename').classList.remove('show');
+  $('#batch-exec').onclick = executeBatchRename;
+  $('#preset-select').onchange = () => { const v = $('#preset-select').value; $('#prefix-row').style.display = v==='prefix_nnn'?'flex':'none'; $('#custom-row').style.display = v==='custom'?'flex':'none'; updateRenamePreview(); };
+  $('#prefix-input').oninput = updateRenamePreview;
+  $('#custom-input').oninput = updateRenamePreview;
+
+  // Viewer
+  $('#viewer-close').onclick = () => { closeViewer(); history.back(); };
+  $('#tap-left').onclick = vPrev; $('#tap-right').onclick = vNext; $('#tap-center').onclick = showViewerBar;
+  $('#viewer-slider').oninput = e => loadViewerPage(parseInt(e.target.value));
 
   // Keyboard
-  document.addEventListener('keydown', onKeyDown);
-
-  // Swipe
-  setupSwipe();
-
-  // Scroll page nav
-  setupScroll();
-
-  // Context menu dismiss
-  document.addEventListener('click', () => hideCtxMenu());
-  window.addEventListener('blur', () => hideCtxMenu());
-  window.addEventListener('resize', () => hideCtxMenu());
-  document.addEventListener('scroll', () => hideCtxMenu(), true);
-
-  // Modal overlay dismiss
-  $('#modal-new-list').addEventListener('click', (e) => {
-    if (e.target === $('#modal-new-list')) hideModal('modal-new-list');
-  });
-  $('#modal-folder').addEventListener('click', (e) => {
-    if (e.target === $('#modal-folder')) hideModal('modal-folder');
-  });
-  $('#folder-modal-close').onclick = () => hideModal('modal-folder');
-
-  // Settings modal
-  $('#btn-settings').onclick = () => openSettingsModal();
-
-  // Bookmark browser
-  $('#btn-bm-browser').onclick = () => openBmBrowser();
-  $('#bm-browser-close').onclick = () => hideModal('modal-bm-browser');
-  $('#modal-bm-browser').addEventListener('click', (e) => {
-    if (e.target === $('#modal-bm-browser')) hideModal('modal-bm-browser');
-  });
-  $('#bm-browser-tabs').addEventListener('click', (e) => {
-    const tab = e.target.closest('.bm-browser-tab');
-    if (!tab) return;
-    App.bmBrowserTab = tab.dataset.tab;
-    App.bmBrowserDetail = null;
-    $$('.bm-browser-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === App.bmBrowserTab));
-    renderBmBrowser();
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input')) return;
+    if (App.viewerVisible) { if (e.key==='Escape') { closeViewer(); history.back(); } else if (e.key==='ArrowLeft') vPrev(); else if (e.key==='ArrowRight') vNext(); return; }
+    if (e.key==='Backspace') { e.preventDefault(); if (App.currentPath) navigate(parentPath(App.currentPath)); }
+    if (e.key==='a' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); selectAll(); }
+    if (e.key==='Escape') clearSelection();
+    if (e.key==='z' && (e.ctrlKey||e.metaKey) && App.undoHistory) { e.preventDefault(); undoRename(); }
   });
 
-  // ZIP import
-  $('#btn-import').onclick = () => $('#zip-input').click();
-  $('#zip-input').onchange = onZipSelected;
-  $('#modal-settings').addEventListener('click', (e) => {
-    if (e.target === $('#modal-settings')) hideModal('modal-settings');
-  });
-  $('#settings-modal-close').onclick = () => hideModal('modal-settings');
+  // Viewer swipe / mouse / wheel
+  let sx = 0;
+  $('#viewer-img-wrap').addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, { passive: true });
+  $('#viewer-img-wrap').addEventListener('touchend', e => { const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx)>50) dx > 0 ? vPrev() : vNext(); });
+  $('#viewer').addEventListener('mousemove', () => { if (App.viewerVisible) showViewerBar(); });
+  let wCD = false;
+  $('#viewer').addEventListener('wheel', e => { if (!App.viewerVisible||wCD) return; e.preventDefault(); wCD=true; setTimeout(()=>wCD=false,200); e.deltaY>0 ? vNext() : vPrev(); }, { passive: false });
 
-  // Browser back/forward
-  window.addEventListener('popstate', onPopState);
-  // Set initial state
-  history.replaceState({ screen: 'shelf' }, '');
+  // Popstate
+  window.addEventListener('popstate', () => { if (App.viewerVisible) { closeViewer(); return; } const p = pathFromHash() ?? ''; if (p !== App.currentPath) { App.currentPath = p; saveSetting('lastPath',p); $('#btn-up').classList.toggle('disabled',!p); renderBreadcrumb(); renderFavorites(); loadFolder(p); } });
 
-  // Store filter pills
-  document.querySelectorAll('.shelf-pill[data-store]').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('.shelf-pill[data-store]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      App.currentStore = btn.dataset.store;
-      renderGrid();
-    };
-  });
-
-  // Sort select
-  $('#shelf-sort').onchange = () => {
-    App.currentSort = $('#shelf-sort').value;
-    renderGrid();
-  };
-}
-
-// ============================================================
-// HELPERS
-// ============================================================
-function $(sel) { return document.querySelector(sel); }
-function $$(sel) { return document.querySelectorAll(sel); }
-
-function showScreen(name) {
-  $('#connection-screen').style.display = name === 'connection' ? 'flex' : 'none';
-  $('#shelf-screen').style.display = name === 'shelf' ? 'flex' : 'none';
-  $('#reader-screen').style.display = name === 'reader' ? 'flex' : 'none';
-}
-
-function toast(msg) {
-  const el = $('#toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2000);
-}
-
-function showModal(id) {
-  $('#' + id).classList.add('show');
-  const input = $('#' + id + ' input');
-  if (input) { input.value = ''; setTimeout(() => input.focus(), 100); }
-}
-function hideModal(id) { $('#' + id).classList.remove('show'); }
-
-const IMG_RE = /\.(png|jpg|jpeg|webp|gif)$/i;
-
-// Recursively list all image files under a folder path
-// hiddenPaths: array of relative paths (from bookRoot) to skip
-async function listImagesRecursive(folderPath, hiddenPaths) {
-  const hidden = hiddenPaths || [];
-  const results = [];
-  const queue = [folderPath];
-  while (queue.length > 0) {
-    const dir = queue.shift();
-    let entries;
-    try { entries = await App.storage.list(dir); } catch(e) { continue; }
-    for (const e of entries) {
-      const fullPath = dir + '/' + e.name;
-      // Check if this path is hidden (relative to folderPath)
-      const rel = fullPath.slice(folderPath.length + 1);
-      if (hidden.some(h => rel === h || rel.startsWith(h + '/'))) continue;
-      if (e['.tag'] === 'folder') {
-        queue.push(fullPath);
-      } else if (e['.tag'] === 'file' && IMG_RE.test(e.name)) {
-        results.push({ name: e.name, path: fullPath });
-      }
-    }
-  }
-  results.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
-  return results;
-}
-
-// ============================================================
-// METADATA
-// ============================================================
-async function loadMetadata() {
-  try {
-    const raw = await App.storage.load('metadata.json');
-    App.metadata = JSON.parse(raw);
-  } catch (e) {
-    // No metadata yet — create default
-    App.metadata = {
-      books: {},
-      lists: {
-        'ふぁぼ': { type: 'default', created: new Date().toISOString().slice(0, 10) }
-      },
-      bookmarks: {}
-    };
-  }
-  // Ensure structure
-  if (!App.metadata.books) App.metadata.books = {};
-  if (!App.metadata.lists) App.metadata.lists = { 'ふぁぼ': { type: 'default', created: new Date().toISOString().slice(0, 10) } };
-  if (!App.metadata.bookmarks) App.metadata.bookmarks = {};
-  if (!App.metadata.hiddenBooks) App.metadata.hiddenBooks = [];
-  if (!App.metadata.bmLists) App.metadata.bmLists = {};
-  if (!App.metadata.lists['ふぁぼ']) App.metadata.lists['ふぁぼ'] = { type: 'default', created: new Date().toISOString().slice(0, 10) };
-}
-
-async function saveMetadata() {
-  if (App.saving) return;
-  App.saving = true;
-  try {
-    await App.storage.save('metadata.json', JSON.stringify(App.metadata, null, 2));
-  } catch (e) {
-    console.error('Failed to save metadata:', e);
-  }
-  App.saving = false;
-}
-
-// Debounced save
-let saveTimer = null;
-function debouncedSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveMetadata, 1500);
-}
-
-// ============================================================
-// SHELF
-// ============================================================
-async function loadShelf() {
-  const grid = $('#shelf-grid');
-  grid.innerHTML = '<div class="shelf-loading"><div class="spinner"></div>読み込み中...</div>';
-
-  await loadMetadata();
-
-  // List book folders from Dropbox
-  try {
-    const entries = await App.storage.list('books');
-    App.bookFolders = entries.filter(e => e['.tag'] === 'folder').map(e => {
-      const name = e.name || e.path_display.split('/').pop();
-      return { id: name, path: 'books/' + name };
-    });
-  } catch (e) {
-    // books folder might not exist
-    App.bookFolders = [];
-  }
-
-  // Ensure each folder has metadata entry
-  for (const folder of App.bookFolders) {
-    if (!App.metadata.books[folder.id]) {
-      App.metadata.books[folder.id] = {
-        title: folder.id,
-        store: '',
-        purchaseDate: '',
-        tags: [],
-        lists: [],
-        coverImage: '',
-        lastReadPage: 0,
-        bindingDirection: 'rtl',
-        totalPages: 0,
-      };
-    }
-  }
-
-  // Also include metadata-only books (synced but not downloaded)
-  const folderIds = new Set(App.bookFolders.map(f => f.id));
-  for (const [id, meta] of Object.entries(App.metadata.books)) {
-    if (!folderIds.has(id)) {
-      App.bookFolders.push({ id, path: 'books/' + id, metadataOnly: true });
-    }
-  }
-
-  renderTabs();
-  renderGrid();
-}
-
-function renderTabs() {
-  const container = $('#shelf-tabs');
-  const lists = ['すべて', 'DL済み', 'ふぁぼ', ...Object.keys(App.metadata.lists).filter(k => k !== 'ふぁぼ')];
-  container.innerHTML = '';
-  for (const name of lists) {
-    const tab = document.createElement('button');
-    tab.className = 'shelf-tab' + (App.currentList === name ? ' active' : '');
-    tab.textContent = name;
-    tab.onclick = () => {
-      App.currentList = name;
-      // リスト系はカスタムソートをデフォルトに
-      if (name !== 'すべて' && name !== 'DL済み') {
-        App.currentSort = 'custom';
-      } else if (App.currentSort === 'custom') {
-        App.currentSort = 'purchase_desc';
-      }
-      $('#shelf-sort').value = App.currentSort;
-      renderTabs();
-      renderGrid();
-    };
-    container.appendChild(tab);
-  }
-}
-
-function getFilteredBooks() {
-  let books = App.bookFolders;
-
-  // Exclude hidden books
-  const hiddenSet = new Set(App.metadata.hiddenBooks || []);
-  books = books.filter(f => !hiddenSet.has(f.id));
-
-  // List filter
-  if (App.currentList === 'DL済み') {
-    books = books.filter(f => !f.metadataOnly);
-  } else if (App.currentList !== 'すべて') {
-    books = books.filter(f => {
-      const meta = App.metadata.books[f.id];
-      return meta && meta.lists && meta.lists.includes(App.currentList);
-    });
-  }
-
-  // Store filter
-  if (App.currentStore !== 'all') {
-    books = books.filter(f => {
-      const meta = App.metadata.books[f.id];
-      const store = (meta && meta.store) || '';
-      if (App.currentStore === 'other') return !store || (store !== 'dlsite' && store !== 'fanza' && store !== 'kindle');
-      return store === App.currentStore;
-    });
-  }
-
-  // Sort
-  books = [...books].sort((a, b) => {
-    const ma = App.metadata.books[a.id] || {};
-    const mb = App.metadata.books[b.id] || {};
-    switch (App.currentSort) {
-      case 'purchase_desc':
-        return (mb.purchaseDate || '').localeCompare(ma.purchaseDate || '');
-      case 'purchase_asc':
-        return (ma.purchaseDate || '').localeCompare(mb.purchaseDate || '');
-      case 'lastread_desc':
-        return (mb.lastReadTime || '').localeCompare(ma.lastReadTime || '');
-      case 'maker_asc':
-        return (ma.makerName || '').localeCompare(mb.makerName || '', 'ja');
-      case 'title_asc':
-        return (ma.title || a.id).localeCompare(mb.title || b.id, 'ja');
-      case 'title_desc':
-        return (mb.title || b.id).localeCompare(ma.title || a.id, 'ja');
-      case 'progress_desc': {
-        const pa = ma.totalPages > 0 ? (ma.lastReadPage || 0) / ma.totalPages : -1;
-        const pb = mb.totalPages > 0 ? (mb.lastReadPage || 0) / mb.totalPages : -1;
-        return pb - pa;
-      }
-      case 'custom': {
-        const list = App.metadata.lists[App.currentList];
-        const order = (list && list.order) || [];
-        const ia = order.indexOf(a.id);
-        const ib = order.indexOf(b.id);
-        return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib);
-      }
-      default:
-        return 0;
-    }
-  });
-
-  return books;
-}
-
-function renderGrid() {
-  const grid = $('#shelf-grid');
-  const books = getFilteredBooks();
-
-  // Update book count
-  const countEl = $('#shelf-book-count');
-  if (countEl) countEl.textContent = `${books.length}冊`;
-
-  if (books.length === 0) {
-    grid.innerHTML = `
-      <div class="shelf-empty" style="grid-column: 1 / -1;">
-        <div class="shelf-empty-icon">📚</div>
-        <div>${App.currentList === 'すべて' ? 'Dropbox の BookViewer/books/ にフォルダを追加してください' : 'このリストは空です'}</div>
-      </div>`;
-    return;
-  }
-
-  grid.innerHTML = '';
-  for (const book of books) {
-    const meta = App.metadata.books[book.id] || {};
-    const isFav = meta.lists && meta.lists.includes('ふぁぼ');
-    const progress = meta.totalPages > 0 ? ((meta.lastReadPage || 0) / meta.totalPages * 100) : 0;
-
-    // Store badge
-    const store = meta.store || '';
-    let badgeHtml = '';
-    if (store === 'dlsite') badgeHtml = '<span class="book-badge dlsite">DLsite</span>';
-    else if (store === 'fanza') badgeHtml = '<span class="book-badge fanza">Fanza</span>';
-    else if (store === 'kindle') badgeHtml = '<span class="book-badge kindle">Kindle</span>';
-    else if (store) badgeHtml = `<span class="book-badge other">${store}</span>`;
-
-    // Maker name
-    const makerHtml = meta.makerName ? `<div class="book-maker">${meta.makerName}</div>` : '';
-
-    const card = document.createElement('div');
-    card.className = 'book-card';
-    card.innerHTML = `
-      <div class="book-cover-wrap">
-        <div class="book-cover-placeholder">${meta.title || book.id}</div>
-        ${badgeHtml}
-        <button class="book-star ${isFav ? 'active' : ''}" data-id="${book.id}">★</button>
-      </div>
-      ${meta.totalPages > 0 ? `<div class="book-progress"><div class="book-progress-bar" style="width:${progress}%"></div></div>` : ''}
-      <div class="book-title">${meta.title || book.id}</div>
-      ${makerHtml}
-    `;
-
-    // Load cover async
-    loadCover(book.id, card);
-
-    // Dim metadata-only cards slightly
-    if (book.metadataOnly) {
-      card.style.opacity = '0.65';
-    }
-
-    // Click -> open reader
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.book-star')) return;
-      if (book.metadataOnly) {
-        toast('未ダウンロード');
-        return;
-      }
-      openReader(book.id);
-    });
-
-    // Star button
-    card.querySelector('.book-star').addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleFav(book.id);
-    });
-
-    // Context menu
-    card.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      showCtxMenu(e.clientX, e.clientY, book.id);
-    });
-
-    // Long press for mobile
-    let longTimer;
-    card.addEventListener('touchstart', (e) => {
-      longTimer = setTimeout(() => {
-        const touch = e.touches[0];
-        showCtxMenu(touch.clientX, touch.clientY, book.id);
-      }, 600);
-    }, { passive: true });
-    card.addEventListener('touchend', () => clearTimeout(longTimer));
-    card.addEventListener('touchmove', () => clearTimeout(longTimer));
-
-    grid.appendChild(card);
-  }
-
-  // Drag reorder (カスタムソート + ユーザーリスト時のみ)
-  if (App.currentSort === 'custom' && App.currentList !== 'すべて' && App.currentList !== 'DL済み') {
-    setupDragReorder(grid, books);
-  }
-}
-
-// ============================================================
-// DRAG REORDER
-// ============================================================
-function setupDragReorder(grid, books) {
-  let dragId = null;
-
-  grid.querySelectorAll('.book-card').forEach((card, idx) => {
-    card.draggable = true;
-    card.style.cursor = 'grab';
-    card.dataset.dragIdx = idx;
-
-    card.addEventListener('dragstart', (e) => {
-      dragId = books[idx].id;
-      card.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    card.addEventListener('dragend', () => {
-      card.classList.remove('dragging');
-      grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    });
-    card.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      card.classList.add('drag-over');
-    });
-    card.addEventListener('dragleave', () => {
-      card.classList.remove('drag-over');
-    });
-    card.addEventListener('drop', (e) => {
-      e.preventDefault();
-      card.classList.remove('drag-over');
-      const dropId = books[idx].id;
-      if (dragId && dragId !== dropId) {
-        reorderList(App.currentList, dragId, dropId, books);
-      }
-    });
-  });
-
-  // Touch drag support
-  let touchDragEl = null;
-  let touchDragId = null;
-  let touchClone = null;
-
-  grid.addEventListener('touchstart', (e) => {
-    if (App.currentSort !== 'custom') return;
-    const card = e.target.closest('.book-card');
-    if (!card) return;
-    const idx = parseInt(card.dataset.dragIdx);
-    if (isNaN(idx)) return;
-
-    // 長押しでドラッグ開始
-    const startY = e.touches[0].clientY;
-    const startX = e.touches[0].clientX;
-    const timer = setTimeout(() => {
-      touchDragEl = card;
-      touchDragId = books[idx].id;
-      card.classList.add('dragging');
-
-      touchClone = card.cloneNode(true);
-      touchClone.style.cssText = `position:fixed;pointer-events:none;z-index:9999;opacity:0.8;width:${card.offsetWidth}px;top:${startY - 30}px;left:${startX - card.offsetWidth/2}px;`;
-      document.body.appendChild(touchClone);
-    }, 400);
-
-    const cancel = () => { clearTimeout(timer); };
-    card.addEventListener('touchend', cancel, { once: true });
-    card.addEventListener('touchmove', (me) => {
-      if (!touchDragEl) { cancel(); return; }
-      me.preventDefault();
-      const ty = me.touches[0].clientY;
-      const tx = me.touches[0].clientX;
-      if (touchClone) {
-        touchClone.style.top = (ty - 30) + 'px';
-        touchClone.style.left = (tx - touchClone.offsetWidth/2) + 'px';
-      }
-      // Highlight drop target
-      grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-      const el = document.elementFromPoint(tx, ty);
-      const target = el && el.closest('.book-card');
-      if (target && target !== touchDragEl) target.classList.add('drag-over');
-    }, { passive: false });
-  }, { passive: true });
-
-  grid.addEventListener('touchend', (e) => {
-    if (!touchDragEl) return;
-    const touch = e.changedTouches[0];
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const target = el && el.closest('.book-card');
-    if (target && target !== touchDragEl) {
-      const dropIdx = parseInt(target.dataset.dragIdx);
-      if (!isNaN(dropIdx)) {
-        reorderList(App.currentList, touchDragId, books[dropIdx].id, books);
-      }
-    }
-    touchDragEl.classList.remove('dragging');
-    grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    if (touchClone) { touchClone.remove(); touchClone = null; }
-    touchDragEl = null;
-    touchDragId = null;
-  });
-}
-
-function reorderList(listName, dragId, dropId, books) {
-  const list = App.metadata.lists[listName];
-  if (!list) return;
-  // 現在の表示順をベースにorder配列を作成
-  const order = books.map(b => b.id);
-  const fromIdx = order.indexOf(dragId);
-  const toIdx = order.indexOf(dropId);
-  if (fromIdx === -1 || toIdx === -1) return;
-  order.splice(fromIdx, 1);
-  order.splice(toIdx, 0, dragId);
-  list.order = order;
-  debouncedSave();
-  renderGrid();
-}
-
-const DLSITE_ID_RE = /^[RBV]J\d{6,}$/;
-const FANZA_ID_RE = /^d_\d+$/;
-const KINDLE_ID_RE = /^\d{10,13}$/;  // ISBN-10 or ISBN-13 (digits only)
-
-function getStoreUrl(bookId) {
-  if (DLSITE_ID_RE.test(bookId)) {
-    return `https://www.dlsite.com/maniax/work/=/product_id/${bookId}.html`;
-  }
-  if (FANZA_ID_RE.test(bookId)) {
-    return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${bookId}/`;
-  }
-  if (KINDLE_ID_RE.test(bookId)) {
-    return `https://www.amazon.co.jp/dp/${bookId}`;
-  }
-  return null;
-}
-
-function getPlayUrl(bookId) {
-  if (DLSITE_ID_RE.test(bookId)) {
-    return `https://play.dlsite.com/work/${bookId}`;
-  }
-  if (FANZA_ID_RE.test(bookId)) {
-    return `https://www.dmm.co.jp/dc/doujin/-/mylibrary/detail/=/product_id=${bookId}/`;
-  }
-  return null;
-}
-
-function getDownloadUrl(bookId) {
-  if (DLSITE_ID_RE.test(bookId)) {
-    return `https://www.dlsite.com/maniax/download/=/product_id/${bookId}.html`;
-  }
-  if (FANZA_ID_RE.test(bookId)) {
-    return `https://www.dmm.co.jp/dc/-/proxy/=/transfer_type=download/shop=doujin/product_id=${bookId}/`;
-  }
-  return null;
-}
-
-function dlsiteDirName(workno) {
-  const m = workno.match(/^([A-Z]+)(\d+)$/);
-  if (!m) return null;
-  const prefix = m[1], num = parseInt(m[2]);
-  const rounded = (Math.floor(num / 1000) + 1) * 1000;
-  return prefix + String(rounded).padStart(m[2].length, '0');
-}
-
-function fanzaImageCandidates(url) {
-  // 元URL例: https://doujin-assets.dmm.co.jp/digital/comic/d_254274/d_254274pl-100x75.jpg
-  // サイズなし版、大きいサイズ版、元URLの順で返す
-  const base = url.replace(/pl-\d+x\d+\.jpg/, '').replace(/pl\.jpg/, '');
-  const id = url.match(/(d_\d+)/)?.[1] || '';
-  return [
-    `${base}pl.jpg`,                    // サイズ指定なし（フルサイズ）
-    url.replace(/\d+x\d+/, '560x420'),  // 大サイズ
-    url.replace(/\d+x\d+/, '380x285'),  // 中サイズ
-    url.replace(/\d+x\d+/, '200x150'),  // 小サイズ
-    url,                                  // 元URL（最終フォールバック）
-  ];
-}
-
-async function tryLoadImage(url) {
-  const img = new Image();
-  return new Promise(resolve => {
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
-    img.src = url;
-  });
-}
-
-async function loadCover(bookId, card) {
-  if (App.coverCache[bookId]) {
-    setCoverImg(card, App.coverCache[bookId]);
-    return;
-  }
-
-  // DLsite作品: 複数URLパターンを試行
-  if (DLSITE_ID_RE.test(bookId)) {
-    const dir = dlsiteDirName(bookId);
-    const candidates = [
-      `https://img.dlsite.jp/modpub/images2/work/doujin/${dir}/${bookId}_img_main.jpg`,
-      `https://img.dlsite.jp/modpub/images2/work/doujin/${dir}/${bookId}_img_main_240x240.jpg`,
-      `https://img.dlsite.jp/${bookId}_img_main_300x300.jpg`,
-    ];
-    for (const url of candidates) {
-      if (await tryLoadImage(url)) {
-        App.coverCache[bookId] = url;
-        setCoverImg(card, url);
-        autoFetchDLsiteMeta(bookId);
-        return;
-      }
-    }
-  }
-
-  // Fanza作品: メタデータのimageSrcから読み込み（複数サイズ試行）
-  if (FANZA_ID_RE.test(bookId)) {
-    const meta = App.metadata.books[bookId];
-    if (meta && meta.imageSrc) {
-      const candidates = fanzaImageCandidates(meta.imageSrc);
-      for (const url of candidates) {
-        if (await tryLoadImage(url)) {
-          App.coverCache[bookId] = url;
-          setCoverImg(card, url);
-          return;
-        }
-      }
-    }
-  }
-
-  // Dropboxから読み込み (フォールバック — フォルダがある本のみ)
-  const bookEntry = App.bookFolders.find(f => f.id === bookId);
-  if (bookEntry && bookEntry.metadataOnly) return;
-
-  try {
-    const meta = App.metadata.books[bookId];
-    const images = await listImagesRecursive('books/' + bookId, meta && meta.hiddenPaths);
-
-    if (images.length === 0) return;
-
-    if (App.metadata.books[bookId]) {
-      App.metadata.books[bookId].totalPages = images.length;
-      if (!App.metadata.books[bookId].coverImage) {
-        App.metadata.books[bookId].coverImage = images[0].path;
-      }
-    }
-
-    const coverPath = (meta && meta.coverImage && images.find(i => i.path === meta.coverImage))
-      ? meta.coverImage : images[0].path;
-    const buf = await App.storage.loadBinary(coverPath);
-    const ext = coverPath.split('.').pop().toLowerCase();
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-    const blob = new Blob([buf], { type: mime });
-    const url = URL.createObjectURL(blob);
-    App.coverCache[bookId] = url;
-    setCoverImg(card, url);
-  } catch (e) {
-    console.warn('Cover load failed for', bookId, e);
-  }
-}
-
-// DLsite作品のタイトル・タグを自動取得
-async function autoFetchDLsiteMeta(bookId) {
-  const meta = App.metadata.books[bookId];
-  if (!meta) return;
-  // タイトルがID以外に設定済みなら不要
-  if (meta.title && meta.title !== bookId) return;
-
-  try {
-    const resp = await fetch('https://play.dlsite.com/api/works', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify([bookId]),
-      credentials: 'include',
-    });
-    if (!resp.ok) return;
-    const data = await resp.json();
-    const works = data.works || data;
-    if (!Array.isArray(works) || works.length === 0) return;
-
-    const w = works.find(x => x.workno === bookId) || works[0];
-    const title = w.work_name || w.name?.ja || w.title;
-    if (title) {
-      meta.title = title;
-      meta.store = 'dlsite';
-      meta.dlsiteId = bookId;
-      // タグ
-      if (w.genre && Array.isArray(w.genre)) {
-        const tags = ['同人'];
-        for (const g of w.genre) {
-          const t = (typeof g === 'string') ? g : (g.name || g.name_ja || g.text);
-          if (t && !tags.includes(t)) tags.push(t);
-        }
-        meta.tags = tags;
-      }
-      debouncedSave();
-      // UIにタイトル反映
-      renderGrid();
-    }
-  } catch (e) {
-    // CORSブロック等で失敗するのは想定内。Pythonパイプライン側で対応
-  }
-}
-
-function setCoverImg(card, url) {
-  const placeholder = card.querySelector('.book-cover-placeholder');
-  if (placeholder) {
-    const img = document.createElement('img');
-    img.className = 'book-cover';
-    img.src = url;
-    placeholder.replaceWith(img);
-  }
-}
-
-// ============================================================
-// FAVORITES & LISTS
-// ============================================================
-function toggleFav(bookId) {
-  const meta = App.metadata.books[bookId];
-  if (!meta) return;
-  if (!meta.lists) meta.lists = [];
-  const idx = meta.lists.indexOf('ふぁぼ');
-  if (idx >= 0) {
-    meta.lists.splice(idx, 1);
-    toast('ふぁぼから削除');
-  } else {
-    meta.lists.push('ふぁぼ');
-    toast('ふぁぼに追加');
-  }
-  debouncedSave();
-  renderGrid();
-}
-
-function addToList(bookId, listName) {
-  const meta = App.metadata.books[bookId];
-  if (!meta) return;
-  if (!meta.lists) meta.lists = [];
-  if (!meta.lists.includes(listName)) {
-    meta.lists.push(listName);
-    toast(`「${listName}」に追加`);
-    debouncedSave();
-  }
-}
-
-function removeFromList(bookId, listName) {
-  const meta = App.metadata.books[bookId];
-  if (!meta || !meta.lists) return;
-  const idx = meta.lists.indexOf(listName);
-  if (idx >= 0) {
-    meta.lists.splice(idx, 1);
-    toast(`「${listName}」から削除`);
-    debouncedSave();
-    renderGrid();
-  }
-}
-
-async function createNewList() {
-  const name = $('#input-list-name').value.trim();
-  if (!name) return;
-  if (name === 'すべて' || name === 'ふぁぼ' || App.metadata.lists[name]) {
-    toast('この名前は使えません');
-    return;
-  }
-  App.metadata.lists[name] = { type: 'user', created: new Date().toISOString().slice(0, 10) };
-  await saveMetadata();
-  hideModal('modal-new-list');
-  renderTabs();
-  toast(`「${name}」を作成`);
-}
-
-// ============================================================
-// HIDE / UNHIDE BOOKS
-// ============================================================
-function hideBook(bookId) {
-  if (!App.metadata.hiddenBooks) App.metadata.hiddenBooks = [];
-  if (!App.metadata.hiddenBooks.includes(bookId)) {
-    App.metadata.hiddenBooks.push(bookId);
-    const meta = App.metadata.books[bookId];
-    const title = (meta && meta.title) || bookId;
-    toast(`「${title}」を非表示にしました`);
-    debouncedSave();
-    renderGrid();
-  }
-}
-
-function unhideBook(bookId) {
-  if (!App.metadata.hiddenBooks) return;
-  const idx = App.metadata.hiddenBooks.indexOf(bookId);
-  if (idx >= 0) {
-    App.metadata.hiddenBooks.splice(idx, 1);
-    const meta = App.metadata.books[bookId];
-    const title = (meta && meta.title) || bookId;
-    toast(`「${title}」を再表示しました`);
-    debouncedSave();
-    renderGrid();
-  }
-}
-
-function openSettingsModal() {
-  const list = $('#hidden-list');
-  const hidden = App.metadata.hiddenBooks || [];
-  const countEl = $('#hidden-count');
-  if (countEl) countEl.textContent = hidden.length > 0 ? `(${hidden.length}件)` : '';
-
-  if (hidden.length === 0) {
-    list.innerHTML = '<div style="color:#555;font-size:11px;padding:12px 0;text-align:center;">非表示の作品はありません</div>';
-  } else {
-    list.innerHTML = '';
-    for (const id of hidden) {
-      const meta = App.metadata.books[id] || {};
-      const row = document.createElement('div');
-      row.className = 'hidden-entry';
-      row.innerHTML = `
-        <span class="hidden-entry-title">${meta.title || id}</span>
-        <span class="hidden-entry-store">${meta.store || ''}</span>
-        <button class="hidden-entry-restore">再表示</button>
-      `;
-      row.querySelector('.hidden-entry-restore').onclick = () => {
-        unhideBook(id);
-        openSettingsModal();
-      };
-      list.appendChild(row);
-    }
-  }
-
-  // エクスポートボタン
-  $('#btn-export-fav').onclick = () => exportList('ふぁぼ');
-  const extraBtns = $('#export-list-btns');
-  extraBtns.innerHTML = '';
-  for (const name of Object.keys(App.metadata.lists).filter(k => k !== 'ふぁぼ')) {
-    const btn = document.createElement('button');
-    btn.className = 'modal-btn';
-    btn.style.fontSize = '11px';
-    btn.textContent = name;
-    btn.onclick = () => exportList(name);
-    extraBtns.appendChild(btn);
-  }
-
-  showModal('modal-settings');
-}
-
-function exportList(listName) {
-  const books = Object.entries(App.metadata.books)
-    .filter(([id, meta]) => meta.lists && meta.lists.includes(listName));
-
-  if (books.length === 0) {
-    toast(`「${listName}」は空です`);
-    return;
-  }
-
-  // カスタム順があればそれに従う
-  const listData = App.metadata.lists[listName];
-  const order = (listData && listData.order) || [];
-  if (order.length > 0) {
-    books.sort((a, b) => {
-      const ia = order.indexOf(a[0]);
-      const ib = order.indexOf(b[0]);
-      return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib);
-    });
-  }
-
-  let text = `# ${listName}（${books.length}作品）\n`;
-  text += `# 出力日: ${new Date().toLocaleDateString('ja-JP')}\n\n`;
-
-  for (const [id, meta] of books) {
-    const title = meta.title || id;
-    const maker = meta.makerName || '';
-    const store = meta.store || '';
-    const url = getStoreUrl(id) || '';
-    text += `${title}\n`;
-    if (maker) text += `  サークル: ${maker}\n`;
-    if (store) text += `  ストア: ${store}\n`;
-    if (url) text += `  ${url}\n`;
-    text += `\n`;
-  }
-
-  // ダウンロード
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${listName}_${new Date().toISOString().slice(0, 10)}.txt`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast(`「${listName}」をエクスポートしました`);
-}
-
-// ============================================================
-// CONTEXT MENU
-// ============================================================
-function showCtxMenu(x, y, bookId) {
-  const menu = $('#ctx-menu');
-  const meta = App.metadata.books[bookId] || {};
-  const isFav = meta.lists && meta.lists.includes('ふぁぼ');
-
-  let html = `
-    <div class="ctx-item" data-action="fav">${isFav ? '★ ふぁぼ解除' : '☆ ふぁぼに追加'}</div>
-  `;
-
-  // User lists
-  const userLists = Object.keys(App.metadata.lists).filter(k => k !== 'ふぁぼ');
-  for (const listName of userLists) {
-    const inList = meta.lists && meta.lists.includes(listName);
-    html += `<div class="ctx-item" data-action="${inList ? 'removelist' : 'addlist'}" data-list="${listName}">${inList ? '✓ ' : ''}${listName}</div>`;
-  }
-
-  // Remove from current list (if viewing a user list)
-  if (App.currentList !== 'すべて' && App.currentList !== 'DL済み') {
-    html += `<div class="ctx-item danger" data-action="removecurrent">このリストから削除</div>`;
-  }
-
-  // Delete book
-  html += `<div class="ctx-item" data-action="folder">フォルダ</div>`;
-  html += `<div class="ctx-item" data-action="hide" style="color:#888;">非表示</div>`;
-
-  // Store links
-  const storeUrl = getStoreUrl(bookId);
-  const dlUrl = getDownloadUrl(bookId);
-  if (storeUrl || dlUrl) {
-    html += `<div class="ctx-divider"></div>`;
-    if (dlUrl) html += `<div class="ctx-item" data-action="download" style="color:var(--accent);">ダウンロード ↗</div>`;
-    if (storeUrl) html += `<div class="ctx-item" data-action="store">作品ページ ↗</div>`;
-  }
-
-  menu.innerHTML = html;
-
-  // Position
-  const mw = 200, mh = menu.scrollHeight || 200;
-  const left = Math.min(x, window.innerWidth - mw - 10);
-  const top = Math.min(y, window.innerHeight - mh - 10);
-  menu.style.left = left + 'px';
-  menu.style.top = top + 'px';
-  menu.classList.add('show');
-
-  // Handlers
-  menu.querySelectorAll('.ctx-item').forEach(item => {
-    item.onclick = (e) => {
-      e.stopPropagation();
-      const action = item.dataset.action;
-      if (action === 'fav') toggleFav(bookId);
-      else if (action === 'addlist') addToList(bookId, item.dataset.list);
-      else if (action === 'removelist') removeFromList(bookId, item.dataset.list);
-      else if (action === 'removecurrent') removeFromList(bookId, App.currentList);
-      else if (action === 'folder') openFolderBrowser(bookId);
-      else if (action === 'hide') hideBook(bookId);
-      else if (action === 'store') { const u = getStoreUrl(bookId); if (u) window.open(u, '_blank'); }
-      else if (action === 'download') { const u = getDownloadUrl(bookId); if (u) window.open(u, '_blank'); }
-      hideCtxMenu();
-    };
-  });
-}
-
-function hideCtxMenu() {
-  $('#ctx-menu').classList.remove('show');
-}
-
-async function deleteBook(bookId) {
-  const meta = App.metadata.books[bookId] || {};
-  const title = meta.title || bookId;
-  if (!confirm(`「${title}」をDropboxから完全に削除しますか？\nこの操作は取り消せません。`)) return;
-
-  toast('削除中...');
-  try {
-    await App.storage.delete('books/' + bookId);
-  } catch (e) {
-    console.error('Failed to delete folder:', e);
-    toast('フォルダ削除に失敗しました');
-    return;
-  }
-
-  // Remove from metadata
-  delete App.metadata.books[bookId];
-  await saveMetadata();
-
-  // Remove from local state
-  App.bookFolders = App.bookFolders.filter(f => f.id !== bookId);
-  if (App.coverCache[bookId]) {
-    URL.revokeObjectURL(App.coverCache[bookId]);
-    delete App.coverCache[bookId];
-  }
-
-  renderGrid();
-  toast(`「${title}」を削除しました`);
-}
-
-// ============================================================
-// FOLDER BROWSER
-// ============================================================
-async function openFolderBrowser(bookId) {
-  const meta = App.metadata.books[bookId] || {};
-  $('#folder-modal-title').textContent = meta.title || bookId;
-  $('#folder-modal-path').textContent = 'books/' + bookId;
-  $('#folder-tree').innerHTML = '<div class="shelf-loading"><div class="spinner"></div></div>';
-  showModal('modal-folder');
-
-  // Delete entire book folder button
-  $('#folder-modal-delete').onclick = async () => {
-    hideModal('modal-folder');
-    await deleteBook(bookId);
-  };
-
-  const tree = await buildFolderTree('books/' + bookId, 0, bookId);
-  $('#folder-tree').innerHTML = tree.length > 0 ? '' : '<div style="color:var(--text-muted);font-size:13px;padding:12px 0;">空のフォルダ</div>';
-  for (const el of tree) {
-    $('#folder-tree').appendChild(el);
-  }
-}
-
-async function buildFolderTree(folderPath, depth, bookId) {
-  const bookRoot = 'books/' + bookId;
-  const meta = App.metadata.books[bookId] || {};
-  if (!meta.hiddenPaths) meta.hiddenPaths = [];
-  const elements = [];
-  let entries;
-  try { entries = await App.storage.list(folderPath); } catch(e) { return elements; }
-
-  // Sort: folders first, then files, both alphabetically
-  const folders = entries.filter(e => e['.tag'] === 'folder').sort((a,b) => a.name.localeCompare(b.name));
-  const files = entries.filter(e => e['.tag'] === 'file').sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-  for (const folder of folders) {
-    const path = folderPath + '/' + folder.name;
-    const rel = path.slice(bookRoot.length + 1);
-    const isHidden = meta.hiddenPaths.includes(rel);
-    const row = document.createElement('div');
-    row.className = 'folder-entry' + (isHidden ? ' hidden-entry' : '');
-    row.innerHTML = `
-      ${'<span class="folder-entry-indent"></span>'.repeat(depth)}
-      <span class="folder-entry-icon">📁</span>
-      <span class="folder-entry-name is-folder">${folder.name}</span>
-      <button class="folder-entry-hide">${isHidden ? '表示' : '非表示'}</button>
-      <button class="folder-entry-del" title="削除">✕</button>
-    `;
-    row.querySelector('.folder-entry-hide').onclick = () => {
-      toggleHidden(bookId, rel);
-      openFolderBrowser(bookId);
-    };
-    row.querySelector('.folder-entry-del').onclick = async () => {
-      if (!confirm(`「${folder.name}」フォルダを削除しますか？`)) return;
-      try {
-        await App.storage.delete(path);
-        toast(`「${folder.name}」を削除`);
-        openFolderBrowser(bookId);
-      } catch(e) { toast('削除に失敗'); }
-    };
-    elements.push(row);
-
-    // Recurse
-    const children = await buildFolderTree(path, depth + 1, bookId);
-    for (const child of children) elements.push(child);
-  }
-
-  for (const file of files) {
-    const path = folderPath + '/' + file.name;
-    const rel = path.slice(bookRoot.length + 1);
-    const isHidden = meta.hiddenPaths.some(h => rel === h || rel.startsWith(h + '/'));
-    const size = file.size ? formatSize(file.size) : '';
-    const row = document.createElement('div');
-    row.className = 'folder-entry' + (isHidden ? ' hidden-entry' : '');
-    row.innerHTML = `
-      ${'<span class="folder-entry-indent"></span>'.repeat(depth)}
-      <span class="folder-entry-icon">${IMG_RE.test(file.name) ? '🖼' : '📄'}</span>
-      <span class="folder-entry-name">${file.name}</span>
-      <span class="folder-entry-size">${size}</span>
-      <button class="folder-entry-del" title="削除">✕</button>
-    `;
-    row.querySelector('.folder-entry-del').onclick = async () => {
-      if (!confirm(`「${file.name}」を削除しますか？`)) return;
-      try {
-        await App.storage.delete(path);
-        toast(`「${file.name}」を削除`);
-        row.remove();
-      } catch(e) { toast('削除に失敗'); }
-    };
-    elements.push(row);
-  }
-
-  return elements;
-}
-
-function toggleHidden(bookId, relPath) {
-  const meta = App.metadata.books[bookId];
-  if (!meta) return;
-  if (!meta.hiddenPaths) meta.hiddenPaths = [];
-  const idx = meta.hiddenPaths.indexOf(relPath);
-  if (idx >= 0) {
-    meta.hiddenPaths.splice(idx, 1);
-    toast('表示に戻しました');
-  } else {
-    meta.hiddenPaths.push(relPath);
-    toast('非表示にしました');
-  }
-  debouncedSave();
-}
-
-function formatSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-// ============================================================
-// READER
-// ============================================================
-async function openReader(bookId) {
-  App.currentBook = bookId;
-  App.pageCache = {};
-  App.toolbarVisible = false;
-  App.bmListMode = null;
-  App.bmListItems = [];
-  App.spreadMode = false;
-  $('#reader-toolbar').classList.remove('visible');
-  $('#reader-topbar').classList.remove('visible');
-  closeBmPanel();
-  updateSpreadUI();
-
-  // Restore buttons hidden in bmList mode
-  $('#reader-bookmark-btn').style.display = '';
-  $('#reader-binding-btn').style.display = '';
-  $('#reader-bm-list-btn').style.display = '';
-  $('#reader-spread-btn').style.display = '';
-
-  const meta = App.metadata.books[bookId] || {};
-  $('#reader-title').textContent = meta.title || bookId;
-  updateBindingBtn();
-
-  showScreen('reader');
-  history.pushState({ screen: 'reader', bookId: bookId }, '', '#read/' + encodeURIComponent(bookId));
-  $('#reader-loading').style.display = 'flex';
-  $('#reader-img').src = '';
-
-  // Load page list
-  try {
-    const images = await listImagesRecursive('books/' + bookId, meta.hiddenPaths);
-
-    App.totalPages = images.length;
-    App.pagePaths = images.map(e => e.path);
-
-    // Update metadata
-    if (App.metadata.books[bookId]) {
-      App.metadata.books[bookId].totalPages = images.length;
-    }
-
-    // Start from last read page
-    const startPage = Math.min(meta.lastReadPage || 0, Math.max(0, images.length - 1));
-    App.currentPage = startPage;
-
-    // Setup slider
-    const slider = $('#reader-slider');
-    slider.min = 0;
-    slider.max = Math.max(0, images.length - 1);
-    slider.value = startPage;
-
-    // Load current page
-    await showPage(startPage);
-
-    // Prefetch neighbors
-    prefetch(startPage);
-
-    // Init bookmark UI
-    updateBookmarkUI();
-  } catch (e) {
-    console.error('Failed to open book:', e);
-    toast('書籍を開けませんでした');
-    closeReader();
-  }
-}
-
-async function showPage(pageNum) {
-  if (pageNum < 0 || pageNum >= App.totalPages) return;
-
-  App.currentPage = pageNum;
-
-  const img1 = $('#reader-img');
-  const img2 = $('#reader-img-2');
-
-  if (App.spreadMode && !App.bmListMode) {
-    // ── 見開きモード ──
-    // ページ0（表紙）は単独表示。以降は2ページずつ。
-    // RTL: img1=右ページ(偶数), img2=左ページ(奇数) → DOM順は img1(右) img2(左) だがflex-direction:rowなのでCSSでorder制御
-    const binding = getBinding();
-    let pageA = pageNum;      // 主ページ
-    let pageB = pageNum + 1;  // ペアページ
-
-    // 表紙(p0)は単独
-    if (pageA === 0) {
-      pageB = -1;
-    }
-    // ペアが範囲外
-    if (pageB >= App.totalPages) {
-      pageB = -1;
-    }
-
-    // RTL: 右にpageA, 左にpageB → img1が右, img2が左
-    // LTR: 左にpageA, 右にpageB → img1が左, img2が右
-    if (binding === 'rtl') {
-      img1.style.order = '2';  // 右側
-      img2.style.order = '1';  // 左側
-    } else {
-      img1.style.order = '1';  // 左側
-      img2.style.order = '2';  // 右側
-    }
-
-    // pageAをロード
-    await loadPageIntoImg(pageA, img1);
-
-    // pageBをロード（あれば）
-    if (pageB >= 0) {
-      img2.style.display = '';
-      await loadPageIntoImg(pageB, img2);
-    } else {
-      img2.style.display = 'none';
-      img2.src = '';
-    }
-
-    updatePageLabel();
-    $('#reader-loading').style.display = 'none';
-    saveProgress();
-    updateBookmarkUI();
-    return;
-  }
-
-  // ── 通常モード（単ページ）──
-  img2.style.display = 'none';
-  img2.src = '';
-  img1.style.order = '';
-
-  updatePageLabel();
-
-  // Check cache
-  if (App.pageCache[pageNum]) {
-    img1.src = App.pageCache[pageNum];
-    $('#reader-loading').style.display = 'none';
-    saveProgress();
-    updateBookmarkUI();
-    return;
-  }
-
-  // Show loading
-  $('#reader-loading').style.display = 'flex';
-
-  try {
-    const url = await loadPageUrl(pageNum);
-    if (App.currentPage === pageNum) {
-      img1.src = url;
-      $('#reader-loading').style.display = 'none';
-    }
-  } catch (e) {
-    console.error('Failed to load page:', e);
-    $('#reader-loading').style.display = 'none';
-  }
-
-  saveProgress();
-  updateBookmarkUI();
-}
-
-// 指定ページのURLをキャッシュから取得 or ロード
-async function loadPageUrl(pageNum) {
-  if (App.pageCache[pageNum]) return App.pageCache[pageNum];
-  const pagePath = App.pagePaths[pageNum];
-  const buf = await App.storage.loadBinary(pagePath);
-  const ext = pagePath.split('.').pop().toLowerCase();
-  const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-  const blob = new Blob([buf], { type: mime });
-  const url = URL.createObjectURL(blob);
-  App.pageCache[pageNum] = url;
-  return url;
-}
-
-// imgタグにページをロード
-async function loadPageIntoImg(pageNum, imgEl) {
-  if (pageNum < 0 || pageNum >= App.totalPages) {
-    imgEl.src = '';
-    return;
-  }
-  try {
-    const url = await loadPageUrl(pageNum);
-    imgEl.src = url;
-  } catch (e) {
-    imgEl.src = '';
-  }
-}
-
-function prefetch(centerPage) {
-  const step = (App.spreadMode && !App.bmListMode) ? 2 : 1;
-  const range = step * 2;
-  for (let i = step; i <= range; i += step) {
-    prefetchPage(centerPage + i);
-    if (App.spreadMode && !App.bmListMode) prefetchPage(centerPage + i + 1);
-    prefetchPage(centerPage - i);
-    if (App.spreadMode && !App.bmListMode) prefetchPage(centerPage - i + 1);
-  }
-}
-
-async function prefetchPage(pageNum) {
-  if (pageNum < 0 || pageNum >= App.totalPages) return;
-  if (App.pageCache[pageNum]) return;
-  try {
-    await loadPageUrl(pageNum);
-  } catch (e) { /* silent */ }
-}
-
-function saveProgress() {
-  if (!App.currentBook || !App.metadata.books[App.currentBook]) return;
-  App.metadata.books[App.currentBook].lastReadPage = App.currentPage;
-  App.metadata.books[App.currentBook].lastReadTime = new Date().toISOString();
-  debouncedSave();
-}
-
-function updatePageLabel() {
-  if (App.spreadMode && !App.bmListMode) {
-    const p = App.currentPage;
-    const pairPage = (p === 0 || p + 1 >= App.totalPages) ? -1 : p + 1;
-    const label = pairPage >= 0
-      ? `${p + 1}-${pairPage + 1} / ${App.totalPages}`
-      : `${p + 1} / ${App.totalPages}`;
-    $('#reader-page-label').textContent = label;
-  } else {
-    const label = `${App.currentPage + 1} / ${App.totalPages}`;
-    $('#reader-page-label').textContent = label;
-  }
-  $('#reader-slider').value = App.currentPage;
-}
-
-function getBinding() {
-  const meta = App.metadata.books[App.currentBook];
-  return (meta && meta.bindingDirection) || 'rtl';
-}
-
-function updateBindingBtn() {
-  const rtl = App.bmListMode ? App.bmListBinding === 'rtl' : getBinding() === 'rtl';
-  $('#reader-binding-btn').textContent = rtl ? '右綴じ' : '左綴じ';
-  const slider = $('#reader-slider');
-  slider.style.direction = rtl ? 'rtl' : 'ltr';
-  if (!App.bmListMode) renderBmDots();
-}
-
-function toggleBinding() {
-  if (App.bmListMode) {
-    App.bmListBinding = App.bmListBinding === 'rtl' ? 'ltr' : 'rtl';
-    updateBindingBtn();
-    return;
-  }
-  const meta = App.metadata.books[App.currentBook];
-  if (!meta) return;
-  meta.bindingDirection = meta.bindingDirection === 'rtl' ? 'ltr' : 'rtl';
-  updateBindingBtn();
-  debouncedSave();
-  if (App.spreadMode) showPage(App.currentPage);
-}
-
-function toggleSpread() {
-  App.spreadMode = !App.spreadMode;
-  updateSpreadUI();
-  showPage(App.currentPage);
-}
-
-function updateSpreadUI() {
-  const btn = $('#reader-spread-btn');
-  const canvas = $('#reader-canvas');
-  const img2 = $('#reader-img-2');
-  btn.classList.toggle('active', App.spreadMode);
-  btn.textContent = App.spreadMode ? '見開き ON' : '見開き';
-  if (App.spreadMode) {
-    canvas.classList.add('spread');
-  } else {
-    canvas.classList.remove('spread');
-    img2.style.display = 'none';
-    img2.src = '';
-  }
-}
-
-function getSpreadStep() {
-  // 見開き時は2ページ送り。ただしp0（表紙）からは1ページ送り（p0は単独表示なので）
-  if (!App.spreadMode || App.bmListMode) return 1;
-  if (App.currentPage === 0) return 1; // 表紙→p1
-  return 2;
-}
-
-function goNext() {
-  const step = getSpreadStep();
-  const nextPage = App.currentPage + step;
-  if (nextPage < App.totalPages) {
-    if (App.bmListMode) {
-      showBmListPage(nextPage);
-      bmListPrefetch(nextPage);
-    } else {
-      showPage(nextPage);
-      prefetch(nextPage);
-    }
-  }
-}
-
-function goPrev() {
-  if (App.currentPage <= 0) return;
-  const step = (App.spreadMode && !App.bmListMode) ? 2 : 1;
-  let prevPage = App.currentPage - step;
-  // p0は単独表示なのでp1から戻る時はp0に
-  if (prevPage < 0) prevPage = 0;
-  if (App.bmListMode) {
-    showBmListPage(prevPage);
-    bmListPrefetch(prevPage);
-  } else {
-    showPage(prevPage);
-    prefetch(prevPage);
-  }
-}
-
-function tapNav(side) {
-  const binding = App.bmListMode ? App.bmListBinding : getBinding();
-  if (binding === 'rtl') {
-    if (side === 'right') goPrev();
-    else goNext();
-  } else {
-    if (side === 'right') goNext();
-    else goPrev();
-  }
-}
-
-function toggleToolbar() {
-  App.toolbarVisible = !App.toolbarVisible;
-  $('#reader-toolbar').classList.toggle('visible', App.toolbarVisible);
-  $('#reader-topbar').classList.toggle('visible', App.toolbarVisible);
-}
-
-function onSliderChange() {
-  const page = parseInt($('#reader-slider').value);
-  if (App.bmListMode) {
-    showBmListPage(page);
-    bmListPrefetch(page);
-  } else {
-    showPage(page);
-    prefetch(page);
-  }
-}
-
-function closeReader(fromPopState) {
-  // Save progress immediately (only for normal books, not bmList)
-  if (!App.bmListMode && App.currentBook && App.metadata.books[App.currentBook]) {
-    App.metadata.books[App.currentBook].lastReadPage = App.currentPage;
-    App.metadata.books[App.currentBook].lastReadTime = new Date().toISOString();
-    saveMetadata();
-  }
-
-  closeBmPanel();
-
-  // Reset bmList mode
-  App.bmListMode = null;
-  App.bmListItems = [];
-
-  // Restore buttons that may have been hidden in bmList mode
-  $('#reader-bookmark-btn').style.display = '';
-  $('#reader-binding-btn').style.display = '';
-  $('#reader-bm-list-btn').style.display = '';
-  $('#reader-spread-btn').style.display = '';
-
-  // Reset spread mode
-  App.spreadMode = false;
-  updateSpreadUI();
-
-  // Revoke page object URLs
-  for (const url of Object.values(App.pageCache)) {
-    URL.revokeObjectURL(url);
-  }
-  App.pageCache = {};
-  App.currentBook = null;
-
-  showScreen('shelf');
-  if (!fromPopState) {
-    history.pushState({ screen: 'shelf' }, '', window.location.pathname);
-  }
-  renderGrid(); // Update progress bars
-}
-
-function onPopState(e) {
-  const state = e.state;
-  if (!state || state.screen === 'shelf') {
-    if (App.currentBook) closeReader(true);
-    // Close any open modals
-    hideModal('modal-new-list');
-    hideModal('modal-folder');
-    hideModal('modal-bm-browser');
-  } else if (state.screen === 'reader' && state.bookId) {
-    openReader(state.bookId);
-  } else if (state.screen === 'reader' && state.bmList) {
-    openBmListReader(state.bmList);
-  }
-}
-
-// ============================================================
-// KEYBOARD
-// ============================================================
-function onKeyDown(e) {
-  if ($('#reader-screen').style.display !== 'flex') return;
-  // Don't capture keys when editing bookmark note
-  if (e.target.classList.contains('bm-note-input') || e.target.classList.contains('bmlist-new-input')) return;
-
-  const binding = App.bmListMode ? App.bmListBinding : getBinding();
-  if (e.key === 'ArrowRight') {
-    e.preventDefault();
-    binding === 'rtl' ? goPrev() : goNext();
-  } else if (e.key === 'ArrowLeft') {
-    e.preventDefault();
-    binding === 'rtl' ? goNext() : goPrev();
-  } else if ((e.key === 'b' || e.key === 'B') && !App.bmListMode) {
-    e.preventDefault();
-    toggleCurrentBookmark();
-  } else if ((e.key === 's' || e.key === 'S') && !App.bmListMode) {
-    e.preventDefault();
-    toggleSpread();
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    if ($('#bm-panel').classList.contains('visible')) closeBmPanel();
-    else if (App.toolbarVisible) toggleToolbar();
-    else closeReader();
-  }
-}
-
-// ============================================================
-// SWIPE
-// ============================================================
-function setupSwipe() {
-  let startX = 0, startY = 0, startTime = 0;
-  const canvas = $('#reader-canvas');
-
-  canvas.addEventListener('touchstart', (e) => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    startTime = Date.now();
-  }, { passive: true });
-
-  canvas.addEventListener('touchend', (e) => {
-    const dx = e.changedTouches[0].clientX - startX;
-    const dy = e.changedTouches[0].clientY - startY;
-    const dt = Date.now() - startTime;
-
-    if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx) || dt > 500) return;
-
-    const binding = App.bmListMode ? App.bmListBinding : getBinding();
-    if (dx > 0) {
-      // Swipe right
-      binding === 'rtl' ? goNext() : goPrev();
-    } else {
-      // Swipe left
-      binding === 'rtl' ? goPrev() : goNext();
-    }
-  }, { passive: true });
-}
-
-// ============================================================
-// SCROLL PAGE NAV
-// ============================================================
-function setupScroll() {
-  let lastScroll = 0;
-  $('#reader-screen').addEventListener('wheel', (e) => {
-    if ($('#reader-screen').style.display !== 'flex') return;
-    e.preventDefault();
-    const now = Date.now();
-    if (now - lastScroll < 250) return; // throttle
-    lastScroll = now;
-    if (e.deltaY > 0) goNext();
-    else if (e.deltaY < 0) goPrev();
-  }, { passive: false });
-}
-
-// ============================================================
-// BOOKMARKS
-// ============================================================
-function getBookmarks(bookId) {
-  if (!App.metadata.bookmarks) App.metadata.bookmarks = {};
-  if (!App.metadata.bookmarks[bookId]) App.metadata.bookmarks[bookId] = [];
-  return App.metadata.bookmarks[bookId];
-}
-
-function isPageBookmarked(bookId, page) {
-  const bms = getBookmarks(bookId);
-  return bms.some(b => b.page === page);
-}
-
-function toggleCurrentBookmark() {
-  if (!App.currentBook) return;
-  const bookId = App.currentBook;
-  const page = App.currentPage;
-  const bms = getBookmarks(bookId);
-  const idx = bms.findIndex(b => b.page === page);
-
-  if (idx >= 0) {
-    bms.splice(idx, 1);
-    toast(`ブックマーク削除: ${page + 1}ページ`);
-  } else {
-    bms.push({ page, note: '', created: new Date().toISOString() });
-    bms.sort((a, b) => a.page - b.page);
-    toast(`ブックマーク追加: ${page + 1}ページ`);
-  }
-
-  debouncedSave();
-  updateBookmarkUI();
-  if ($('#bm-panel').classList.contains('visible')) renderBmPanel();
-}
-
-function updateBookmarkUI() {
-  if (!App.currentBook) return;
-  const bookId = App.currentBook;
-  const page = App.currentPage;
-  const marked = isPageBookmarked(bookId, page);
-  const bms = getBookmarks(bookId);
-
-  // Bookmark button state
-  const btn = $('#reader-bookmark-btn');
-  btn.classList.toggle('active', marked);
-
-  // Bookmark indicator on page
-  $('#reader-bm-indicator').classList.toggle('active', marked);
-
-  // Bookmark count
-  const countEl = $('#bm-count');
-  countEl.textContent = bms.length > 0 ? bms.length : '';
-
-  // Bookmark dots on slider
-  renderBmDots();
-}
-
-function renderBmDots() {
-  const container = $('#reader-bm-dots');
-  container.innerHTML = '';
-  if (!App.currentBook || App.totalPages <= 1) return;
-
-  const bms = getBookmarks(App.currentBook);
-  if (bms.length === 0) return;
-
-  const slider = $('#reader-slider');
-  const binding = getBinding();
-
-  for (const bm of bms) {
-    const dot = document.createElement('div');
-    dot.className = 'reader-bm-dot';
-    const ratio = bm.page / (App.totalPages - 1);
-    // RTL: slider direction is reversed, so invert position
-    const pct = binding === 'rtl' ? (1 - ratio) * 100 : ratio * 100;
-    dot.style.left = `calc(${pct}% - 2px)`;
-    dot.title = `${bm.page + 1}ページ${bm.note ? ': ' + bm.note : ''}`;
-    dot.onclick = (e) => {
-      e.stopPropagation();
-      showPage(bm.page);
-      prefetch(bm.page);
-    };
-    container.appendChild(dot);
-  }
-}
-
-function toggleBmPanel() {
-  const panel = $('#bm-panel');
-  if (panel.classList.contains('visible')) {
-    closeBmPanel();
-  } else {
-    openBmPanel();
-  }
-}
-
-function openBmPanel() {
-  renderBmPanel();
-  $('#bm-panel').classList.add('visible');
-}
-
-function closeBmPanel() {
-  $('#bm-panel').classList.remove('visible');
-}
-
-function renderBmPanel() {
-  const list = $('#bm-panel-list');
-  if (!App.currentBook) { list.innerHTML = ''; return; }
-
-  const bookId = App.currentBook;
-  const bms = getBookmarks(bookId);
-
-  if (bms.length === 0) {
-    list.innerHTML = '<div class="bm-panel-empty">🔖 ブックマークはありません<br><span style="font-size:11px;color:#555;margin-top:4px;display:inline-block;">ツールバーの 🔖 ボタンで追加</span></div>';
-    return;
-  }
-
-  list.innerHTML = '';
-  for (const bm of bms) {
-    const isCurrent = bm.page === App.currentPage;
-    const entry = document.createElement('div');
-    entry.className = 'bm-entry' + (isCurrent ? ' current' : '');
-
-    // Thumbnail (use cache if available)
-    let thumbHtml = '<div class="bm-entry-thumb"><span class="bm-entry-thumb-placeholder">p.' + (bm.page + 1) + '</span></div>';
-    if (App.pageCache[bm.page]) {
-      thumbHtml = `<div class="bm-entry-thumb"><img src="${App.pageCache[bm.page]}" alt=""></div>`;
-    }
-
-    const timeStr = bm.created ? new Date(bm.created).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-
-    entry.innerHTML = `
-      ${thumbHtml}
-      <div class="bm-entry-info">
-        <div class="bm-entry-page">${bm.page + 1} / ${App.totalPages} ページ</div>
-        ${bm.note ? `<div class="bm-entry-note">${bm.note}</div>` : '<div class="bm-entry-note" style="color:#555;font-style:italic;">メモなし</div>'}
-        <div class="bm-entry-time">${timeStr}</div>
-      </div>
-      <div class="bm-entry-actions">
-        <button class="bm-entry-btn addlist-btn" title="マイリストに追加">+📋</button>
-        <button class="bm-entry-btn memo-btn" title="メモ編集">✏️</button>
-        <button class="bm-entry-btn del" title="削除">✕</button>
-      </div>
-    `;
-
-    // Jump to page on click
-    entry.addEventListener('click', (e) => {
-      if (e.target.closest('.bm-entry-btn') || e.target.closest('.bm-note-input')) return;
-      showPage(bm.page);
-      prefetch(bm.page);
-      closeBmPanel();
-    });
-
-    // Add to bmList
-    entry.querySelector('.addlist-btn').onclick = (e) => {
-      e.stopPropagation();
-      showAddToBmListDropdown(e.target, bookId, bm.page);
-    };
-
-    // Memo edit button
-    entry.querySelector('.memo-btn').onclick = (e) => {
-      e.stopPropagation();
-      const infoDiv = entry.querySelector('.bm-entry-info');
-      const existingInput = infoDiv.querySelector('.bm-note-input');
-      if (existingInput) { existingInput.focus(); return; }
-
-      const noteDiv = infoDiv.querySelector('.bm-entry-note');
-      const input = document.createElement('input');
-      input.className = 'bm-note-input';
-      input.value = bm.note || '';
-      input.placeholder = 'メモを入力...';
-      input.maxLength = 100;
-      noteDiv.replaceWith(input);
-      input.focus();
-
-      const save = () => {
-        bm.note = input.value.trim();
-        debouncedSave();
-        renderBmPanel();
-        updateBookmarkUI();
-      };
-      input.onblur = save;
-      input.onkeydown = (ke) => {
-        if (ke.key === 'Enter') { ke.preventDefault(); save(); }
-        if (ke.key === 'Escape') { ke.preventDefault(); renderBmPanel(); }
-        ke.stopPropagation();  // prevent reader keyboard nav
-      };
-    };
-
-    // Delete button
-    entry.querySelector('.del').onclick = (e) => {
-      e.stopPropagation();
-      const idx = bms.findIndex(b => b.page === bm.page);
-      if (idx >= 0) {
-        bms.splice(idx, 1);
-        toast(`ブックマーク削除: ${bm.page + 1}ページ`);
-        debouncedSave();
-        updateBookmarkUI();
-        renderBmPanel();
-      }
-    };
-
-    list.appendChild(entry);
-
-    // Async load thumbnail if not cached
-    if (!App.pageCache[bm.page]) {
-      loadBmThumb(bm.page, entry);
-    }
-  }
-}
-
-async function loadBmThumb(page, entry) {
-  if (!App.currentBook || page < 0 || page >= App.totalPages) return;
-  try {
-    const pagePath = App.pagePaths[page];
-    const buf = await App.storage.loadBinary(pagePath);
-    const ext = pagePath.split('.').pop().toLowerCase();
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-    const blob = new Blob([buf], { type: mime });
-    const url = URL.createObjectURL(blob);
-    App.pageCache[page] = url;
-    const thumbDiv = entry.querySelector('.bm-entry-thumb');
-    if (thumbDiv) thumbDiv.innerHTML = `<img src="${url}" alt="">`;
-  } catch (e) { /* silent */ }
-}
-
-// ============================================================
-// BOOKMARK BROWSER (shelf-level modal)
-// ============================================================
-function getAllBookmarksSorted() {
-  const all = [];
-  const bookmarks = App.metadata.bookmarks || {};
-  for (const [bookId, bms] of Object.entries(bookmarks)) {
-    for (const bm of bms) {
-      all.push({ bookId, page: bm.page, note: bm.note, created: bm.created || '' });
-    }
-  }
-  all.sort((a, b) => b.created.localeCompare(a.created)); // newest first
-  return all;
-}
-
-function openBmBrowser() {
-  App.bmBrowserDetail = null;
-  renderBmBrowser();
-  showModal('modal-bm-browser');
-}
-
-function renderBmBrowser() {
-  const body = $('#bm-browser-body');
-  if (App.bmBrowserTab === 'all') {
-    renderBmBrowserAll(body);
-  } else {
-    if (App.bmBrowserDetail) {
-      renderBmListDetail(body, App.bmBrowserDetail);
-    } else {
-      renderBmBrowserLists(body);
-    }
-  }
-}
-
-function renderBmBrowserAll(body) {
-  const all = getAllBookmarksSorted();
-  if (all.length === 0) {
-    body.innerHTML = '<div class="bm-panel-empty">ブックマークはありません</div>';
-    return;
-  }
-  body.innerHTML = '';
-  for (const item of all) {
-    const meta = App.metadata.books[item.bookId] || {};
-    const title = meta.title || item.bookId;
-    const timeStr = item.created ? new Date(item.created).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-
-    const row = document.createElement('div');
-    row.className = 'bm-all-entry';
-    row.innerHTML = `
-      <div class="bm-entry-thumb"><span class="bm-entry-thumb-placeholder">p.${item.page + 1}</span></div>
-      <div class="bm-entry-info">
-        <div class="bm-entry-page">${item.page + 1}ページ</div>
-        <div class="bm-all-book">${title}</div>
-        ${item.note ? `<div class="bmlist-item-note">${item.note}</div>` : ''}
-        <div class="bm-entry-time">${timeStr}</div>
-      </div>
-      <div class="bm-all-actions">
-        <button class="bm-all-btn accent" title="マイリストに追加">+リスト</button>
-        <button class="bm-all-btn del" title="削除">✕</button>
-      </div>
-    `;
-
-    // Load thumbnail async
-    loadBmBrowserThumb(item.bookId, item.page, row.querySelector('.bm-entry-thumb'));
-
-    // Add to bmList
-    row.querySelector('.accent').onclick = (e) => {
-      e.stopPropagation();
-      showAddToBmListDropdown(e.target, item.bookId, item.page);
-    };
-
-    // Delete
-    row.querySelector('.del').onclick = (e) => {
-      e.stopPropagation();
-      const bms = getBookmarks(item.bookId);
-      const idx = bms.findIndex(b => b.page === item.page);
-      if (idx >= 0) {
-        bms.splice(idx, 1);
-        toast(`ブックマーク削除`);
-        debouncedSave();
-        renderBmBrowser();
-      }
-    };
-
-    // Click to open book at page
-    row.style.cursor = 'pointer';
-    row.addEventListener('click', (e) => {
-      if (e.target.closest('.bm-all-btn')) return;
-      const bookEntry = App.bookFolders.find(f => f.id === item.bookId);
-      if (bookEntry && bookEntry.metadataOnly) {
-        toast('未ダウンロード');
-        return;
-      }
-      hideModal('modal-bm-browser');
-      openReaderAtPage(item.bookId, item.page);
-    });
-
-    body.appendChild(row);
-  }
-}
-
-const _bmThumbPathCache = {}; // bookId -> [path, path, ...]
-async function loadBmBrowserThumb(bookId, page, thumbDiv) {
-  // Load actual page image from Dropbox (with path caching per book)
-  try {
-    if (!_bmThumbPathCache[bookId]) {
-      const meta = App.metadata.books[bookId] || {};
-      const images = await listImagesRecursive('books/' + bookId, meta.hiddenPaths);
-      _bmThumbPathCache[bookId] = images.map(e => e.path);
-    }
-    const paths = _bmThumbPathCache[bookId];
-    if (page >= paths.length) return;
-    const pagePath = paths[page];
-    const buf = await App.storage.loadBinary(pagePath);
-    const ext = pagePath.split('.').pop().toLowerCase();
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-    const blob = new Blob([buf], { type: mime });
-    const url = URL.createObjectURL(blob);
-    if (thumbDiv) thumbDiv.innerHTML = `<img src="${url}" alt="">`;
-  } catch (e) { /* silent — keep placeholder */ }
-}
-
-function showAddToBmListDropdown(anchor, bookId, page) {
-  // Remove any existing dropdown
-  document.querySelectorAll('.bm-add-dropdown').forEach(d => d.remove());
-
-  const lists = App.metadata.bmLists || {};
-  const dropdown = document.createElement('div');
-  dropdown.className = 'bm-add-dropdown';
-
-  if (Object.keys(lists).length === 0) {
-    dropdown.innerHTML = '<div class="bm-add-dropdown-item" style="color:#555;">マイリストがありません</div>';
-  } else {
-    for (const [name, list] of Object.entries(lists)) {
-      const inList = list.items && list.items.some(i => i.bookId === bookId && i.page === page);
-      const item = document.createElement('div');
-      item.className = 'bm-add-dropdown-item' + (inList ? ' in-list' : '');
-      item.textContent = (inList ? '✓ ' : '') + name;
-      item.onclick = (e) => {
-        e.stopPropagation();
-        if (inList) {
-          removeBmFromList(name, bookId, page);
-        } else {
-          addBmToList(name, bookId, page);
-        }
-        dropdown.remove();
-        renderBmBrowser();
-      };
-      dropdown.appendChild(item);
-    }
-  }
-
-  // Position near anchor
-  const rect = anchor.getBoundingClientRect();
-  dropdown.style.position = 'fixed';
-  dropdown.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
-  dropdown.style.top = (rect.bottom + 4) + 'px';
-  document.body.appendChild(dropdown);
-
-  // Auto close
-  const close = (e) => {
-    if (!dropdown.contains(e.target)) { dropdown.remove(); document.removeEventListener('click', close); }
-  };
-  setTimeout(() => document.addEventListener('click', close), 10);
-}
-
-function addBmToList(listName, bookId, page) {
-  const list = App.metadata.bmLists[listName];
-  if (!list) return;
-  if (!list.items) list.items = [];
-  if (list.items.some(i => i.bookId === bookId && i.page === page)) return;
-  list.items.push({ bookId, page });
-  toast(`「${listName}」に追加`);
-  debouncedSave();
-}
-
-function removeBmFromList(listName, bookId, page) {
-  const list = App.metadata.bmLists[listName];
-  if (!list || !list.items) return;
-  const idx = list.items.findIndex(i => i.bookId === bookId && i.page === page);
-  if (idx >= 0) {
-    list.items.splice(idx, 1);
-    toast(`「${listName}」から削除`);
-    debouncedSave();
-  }
-}
-
-// ============================================================
-// BM LISTS TAB
-// ============================================================
-function renderBmBrowserLists(body) {
-  const lists = App.metadata.bmLists || {};
-  body.innerHTML = '';
-
-  // New list creation header
-  const header = document.createElement('div');
-  header.className = 'bmlist-header';
-  header.innerHTML = `
-    <input class="bmlist-new-input" id="bmlist-new-name" placeholder="新しいマイリスト名..." maxlength="40">
-    <button class="bmlist-new-btn" id="bmlist-new-create">作成</button>
-  `;
-  body.appendChild(header);
-
-  header.querySelector('#bmlist-new-create').onclick = () => {
-    const name = header.querySelector('#bmlist-new-name').value.trim();
-    if (!name) return;
-    if (lists[name]) { toast('同名のリストがあります'); return; }
-    App.metadata.bmLists[name] = { items: [], created: new Date().toISOString() };
-    debouncedSave();
-    toast(`「${name}」を作成`);
-    renderBmBrowser();
-  };
-  header.querySelector('#bmlist-new-name').onkeydown = (e) => {
-    if (e.key === 'Enter') header.querySelector('#bmlist-new-create').click();
-  };
-
-  const names = Object.keys(lists);
-  if (names.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'bm-panel-empty';
-    empty.textContent = 'マイリストはまだありません';
-    body.appendChild(empty);
-    return;
-  }
-
-  for (const name of names) {
-    const list = lists[name];
-    const count = (list.items || []).length;
-    const card = document.createElement('div');
-    card.className = 'bmlist-card';
-    card.innerHTML = `
-      <div class="bmlist-card-icon">📋</div>
-      <div class="bmlist-card-info">
-        <div class="bmlist-card-name">${name}</div>
-        <div class="bmlist-card-count">${count}ページ</div>
-      </div>
-      <div class="bmlist-card-actions">
-        <button class="bm-all-btn accent" title="読む">▶ 読む</button>
-        <button class="bm-all-btn del" title="削除">✕</button>
-      </div>
-    `;
-
-    // Click card -> show detail view
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.bm-all-btn')) return;
-      App.bmBrowserDetail = name;
-      renderBmBrowser();
-    });
-
-    // Read button
-    card.querySelector('.accent').onclick = (e) => {
-      e.stopPropagation();
-      hideModal('modal-bm-browser');
-      openBmListReader(name);
-    };
-
-    // Delete
-    card.querySelector('.del').onclick = (e) => {
-      e.stopPropagation();
-      if (!confirm(`マイリスト「${name}」を削除しますか？`)) return;
-      delete App.metadata.bmLists[name];
-      debouncedSave();
-      toast(`「${name}」を削除`);
-      renderBmBrowser();
-    };
-
-    body.appendChild(card);
-  }
-}
-
-// ============================================================
-// BM LIST DETAIL VIEW (inside modal)
-// ============================================================
-function renderBmListDetail(body, listName) {
-  const list = App.metadata.bmLists[listName];
-  if (!list) { App.bmBrowserDetail = null; renderBmBrowser(); return; }
-  const items = list.items || [];
-
-  body.innerHTML = '';
-
-  // Header with back button
-  const header = document.createElement('div');
-  header.className = 'bmlist-detail-header';
-  header.innerHTML = `
-    <button class="bmlist-detail-back">←</button>
-    <div class="bmlist-detail-title">${listName}（${items.length}ページ）</div>
-    <button class="bmlist-detail-read" ${items.length === 0 ? 'disabled' : ''}>▶ 読む</button>
-  `;
-  header.querySelector('.bmlist-detail-back').onclick = () => {
-    App.bmBrowserDetail = null;
-    renderBmBrowser();
-  };
-  header.querySelector('.bmlist-detail-read').onclick = () => {
-    if (items.length === 0) return;
-    hideModal('modal-bm-browser');
-    openBmListReader(listName);
-  };
-  body.appendChild(header);
-
-  if (items.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'bm-panel-empty';
-    empty.innerHTML = 'ページがありません<br><span style="font-size:11px;color:#555;">「すべて」タブからブックマークを追加</span>';
-    body.appendChild(empty);
-    return;
-  }
-
-  // Draggable item list
-  const listEl = document.createElement('div');
-  listEl.id = 'bmlist-detail-items';
-  body.appendChild(listEl);
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const meta = App.metadata.books[item.bookId] || {};
-    const title = meta.title || item.bookId;
-    const bms = getBookmarks(item.bookId);
-    const bm = bms.find(b => b.page === item.page);
-    const note = bm ? bm.note : '';
-
-    const row = document.createElement('div');
-    row.className = 'bmlist-item';
-    row.draggable = true;
-    row.dataset.idx = i;
-    row.innerHTML = `
-      <div class="bmlist-drag-handle">⠿</div>
-      <div class="bmlist-item-thumb"><span class="bm-entry-thumb-placeholder">p.${item.page + 1}</span></div>
-      <div class="bmlist-item-info">
-        <div class="bmlist-item-book">${title}</div>
-        <div class="bmlist-item-page">${item.page + 1}ページ</div>
-        ${note ? `<div class="bmlist-item-note">${note}</div>` : ''}
-      </div>
-      <div class="bm-all-actions">
-        <button class="bm-all-btn del" title="削除">✕</button>
-      </div>
-    `;
-
-    // Load thumb
-    loadBmBrowserThumb(item.bookId, item.page, row.querySelector('.bmlist-item-thumb'));
-
-    // Delete from list
-    row.querySelector('.del').onclick = (e) => {
-      e.stopPropagation();
-      items.splice(i, 1);
-      debouncedSave();
-      renderBmListDetail(body, listName);
-    };
-
-    listEl.appendChild(row);
-  }
-
-  // Setup drag reorder for detail items
-  setupBmListDrag(listEl, items, listName, body);
-}
-
-function setupBmListDrag(container, items, listName, bodyEl) {
-  let dragIdx = null;
-
-  container.querySelectorAll('.bmlist-item').forEach(row => {
-    row.addEventListener('dragstart', (e) => {
-      dragIdx = parseInt(row.dataset.idx);
-      row.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    row.addEventListener('dragend', () => {
-      row.classList.remove('dragging');
-      container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
-    });
-    row.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      row.classList.add('drag-over');
-    });
-    row.addEventListener('dragleave', () => {
-      row.classList.remove('drag-over');
-    });
-    row.addEventListener('drop', (e) => {
-      e.preventDefault();
-      row.classList.remove('drag-over');
-      const dropIdx = parseInt(row.dataset.idx);
-      if (dragIdx !== null && dragIdx !== dropIdx) {
-        const moved = items.splice(dragIdx, 1)[0];
-        items.splice(dropIdx, 0, moved);
-        debouncedSave();
-        renderBmListDetail(bodyEl, listName);
-      }
-    });
-  });
-
-  // Touch drag support
-  let touchRow = null, touchIdx = null, touchClone = null;
-
-  container.addEventListener('touchstart', (e) => {
-    const handle = e.target.closest('.bmlist-drag-handle');
-    if (!handle) return;
-    const row = handle.closest('.bmlist-item');
-    if (!row) return;
-    const idx = parseInt(row.dataset.idx);
-    if (isNaN(idx)) return;
-
-    e.preventDefault();
-    touchRow = row;
-    touchIdx = idx;
-    row.classList.add('dragging');
-
-    const rect = row.getBoundingClientRect();
-    touchClone = row.cloneNode(true);
-    touchClone.style.cssText = `position:fixed;pointer-events:none;z-index:9999;opacity:0.8;width:${rect.width}px;top:${rect.top}px;left:${rect.left}px;`;
-    document.body.appendChild(touchClone);
-  }, { passive: false });
-
-  container.addEventListener('touchmove', (e) => {
-    if (!touchRow) return;
-    e.preventDefault();
-    const ty = e.touches[0].clientY;
-    const tx = e.touches[0].clientX;
-    if (touchClone) touchClone.style.top = (ty - 25) + 'px';
-    container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
-    const el = document.elementFromPoint(tx, ty);
-    const target = el && el.closest('.bmlist-item');
-    if (target && target !== touchRow) target.classList.add('drag-over');
-  }, { passive: false });
-
-  container.addEventListener('touchend', (e) => {
-    if (!touchRow) return;
-    const touch = e.changedTouches[0];
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const target = el && el.closest('.bmlist-item');
-    if (target && target !== touchRow) {
-      const dropIdx = parseInt(target.dataset.idx);
-      if (!isNaN(dropIdx) && touchIdx !== dropIdx) {
-        const moved = items.splice(touchIdx, 1)[0];
-        items.splice(dropIdx, 0, moved);
-        debouncedSave();
-        renderBmListDetail(bodyEl, listName);
-      }
-    }
-    touchRow.classList.remove('dragging');
-    container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
-    if (touchClone) { touchClone.remove(); touchClone = null; }
-    touchRow = null;
-    touchIdx = null;
-  });
-}
-
-// ============================================================
-// BM LIST READER (read a bmList as a virtual book)
-// ============================================================
-async function openBmListReader(listName) {
-  const list = App.metadata.bmLists[listName];
-  if (!list || !list.items || list.items.length === 0) {
-    toast('空のマイリストです');
-    return;
-  }
-
-  // Build virtual page list: resolve each item to its Dropbox path
-  const resolvedItems = [];
-  const pagePaths = [];
-
-  // We need page paths for all items. Group by bookId to avoid redundant folder scans.
-  const bookPageMap = {}; // bookId -> Set of page numbers needed
-  for (const item of list.items) {
-    if (!bookPageMap[item.bookId]) bookPageMap[item.bookId] = new Set();
-    bookPageMap[item.bookId].add(item.page);
-  }
-
-  // Resolve paths per book
-  const bookPathCache = {}; // bookId -> sorted image path array
-  for (const bookId of Object.keys(bookPageMap)) {
-    const meta = App.metadata.books[bookId] || {};
-    try {
-      const images = await listImagesRecursive('books/' + bookId, meta.hiddenPaths);
-      bookPathCache[bookId] = images.map(e => e.path);
-    } catch (e) {
-      bookPathCache[bookId] = [];
-    }
-  }
-
-  for (const item of list.items) {
-    const paths = bookPathCache[item.bookId] || [];
-    if (item.page < paths.length) {
-      resolvedItems.push({ bookId: item.bookId, page: item.page, path: paths[item.page] });
-      pagePaths.push(paths[item.page]);
-    }
-  }
-
-  if (pagePaths.length === 0) {
-    toast('読めるページがありません（未ダウンロード？）');
-    return;
-  }
-
-  // Setup reader in bmList mode
-  App.bmListMode = listName;
-  App.bmListItems = resolvedItems;
-  App.currentBook = '__bmlist__';
-  App.pageCache = {};
-  App.toolbarVisible = false;
-  App.currentPage = 0;
-  App.totalPages = pagePaths.length;
-  App.pagePaths = pagePaths;
-
-  $('#reader-toolbar').classList.remove('visible');
-  $('#reader-topbar').classList.remove('visible');
-  closeBmPanel();
-
-  $('#reader-title').textContent = '📋 ' + listName;
-  // Hide bookmark btn in bmList mode (not relevant), but keep binding btn
-  $('#reader-bookmark-btn').style.display = 'none';
-  $('#reader-bm-list-btn').style.display = 'none';
-  $('#reader-spread-btn').style.display = 'none';
-  $('#reader-binding-btn').style.display = '';
-
-  // Set binding btn text for bmList
-  const bmRtl = App.bmListBinding === 'rtl';
-  $('#reader-binding-btn').textContent = bmRtl ? '右綴じ' : '左綴じ';
-
-  showScreen('reader');
-  history.pushState({ screen: 'reader', bmList: listName }, '', '#bmlist/' + encodeURIComponent(listName));
-  $('#reader-loading').style.display = 'flex';
-  $('#reader-img').src = '';
-
-  // Setup slider
-  const slider = $('#reader-slider');
-  slider.min = 0;
-  slider.max = Math.max(0, pagePaths.length - 1);
-  slider.value = 0;
-  slider.style.direction = App.bmListBinding === 'rtl' ? 'rtl' : 'ltr';
-
-  await showBmListPage(0);
-  bmListPrefetch(0);
-}
-
-async function showBmListPage(pageNum) {
-  if (pageNum < 0 || pageNum >= App.totalPages) return;
-  App.currentPage = pageNum;
-
-  const label = `${pageNum + 1} / ${App.totalPages}`;
-  $('#reader-page-label').textContent = label;
-  $('#reader-slider').value = pageNum;
-
-  // Show source info in title
-  if (App.bmListItems[pageNum]) {
-    const item = App.bmListItems[pageNum];
-    const meta = App.metadata.books[item.bookId] || {};
-    const title = meta.title || item.bookId;
-    $('#reader-title').textContent = `📋 ${App.bmListMode} — ${title} p.${item.page + 1}`;
-  }
-
-  // Hide bookmark indicator
-  $('#reader-bm-indicator').classList.remove('active');
-  // Clear bm dots
-  $('#reader-bm-dots').innerHTML = '';
-
-  if (App.pageCache[pageNum]) {
-    $('#reader-img').src = App.pageCache[pageNum];
-    $('#reader-loading').style.display = 'none';
-    return;
-  }
-
-  $('#reader-loading').style.display = 'flex';
-  try {
-    const pagePath = App.pagePaths[pageNum];
-    const buf = await App.storage.loadBinary(pagePath);
-    const ext = pagePath.split('.').pop().toLowerCase();
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-    const blob = new Blob([buf], { type: mime });
-    const url = URL.createObjectURL(blob);
-    App.pageCache[pageNum] = url;
-    if (App.currentPage === pageNum) {
-      $('#reader-img').src = url;
-      $('#reader-loading').style.display = 'none';
-    }
-  } catch (e) {
-    console.error('Failed to load bmList page:', e);
-    $('#reader-loading').style.display = 'none';
-  }
-}
-
-function bmListPrefetch(center) {
-  for (let i = 1; i <= 2; i++) {
-    bmListPrefetchOne(center + i);
-    bmListPrefetchOne(center - i);
-  }
-}
-
-async function bmListPrefetchOne(pageNum) {
-  if (pageNum < 0 || pageNum >= App.totalPages) return;
-  if (App.pageCache[pageNum]) return;
-  try {
-    const pagePath = App.pagePaths[pageNum];
-    const buf = await App.storage.loadBinary(pagePath);
-    const ext = pagePath.split('.').pop().toLowerCase();
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-    const blob = new Blob([buf], { type: mime });
-    App.pageCache[pageNum] = URL.createObjectURL(blob);
-  } catch(e) { /* silent */ }
-}
-
-// Helper: open a specific book at a specific page
-async function openReaderAtPage(bookId, page) {
-  App.currentBook = bookId;
-  App.pageCache = {};
-  App.toolbarVisible = false;
-  App.bmListMode = null;
-  App.bmListItems = [];
-  App.spreadMode = false;
-  $('#reader-toolbar').classList.remove('visible');
-  $('#reader-topbar').classList.remove('visible');
-  closeBmPanel();
-  updateSpreadUI();
-
-  // Restore buttons hidden in bmList mode
-  $('#reader-bookmark-btn').style.display = '';
-  $('#reader-binding-btn').style.display = '';
-  $('#reader-bm-list-btn').style.display = '';
-  $('#reader-spread-btn').style.display = '';
-
-  const meta = App.metadata.books[bookId] || {};
-  $('#reader-title').textContent = meta.title || bookId;
-  updateBindingBtn();
-
-  showScreen('reader');
-  history.pushState({ screen: 'reader', bookId: bookId }, '', '#read/' + encodeURIComponent(bookId));
-  $('#reader-loading').style.display = 'flex';
-  $('#reader-img').src = '';
-
-  try {
-    const images = await listImagesRecursive('books/' + bookId, meta.hiddenPaths);
-    App.totalPages = images.length;
-    App.pagePaths = images.map(e => e.path);
-    if (App.metadata.books[bookId]) App.metadata.books[bookId].totalPages = images.length;
-
-    const startPage = Math.min(page, Math.max(0, images.length - 1));
-    App.currentPage = startPage;
-
-    const slider = $('#reader-slider');
-    slider.min = 0;
-    slider.max = Math.max(0, images.length - 1);
-    slider.value = startPage;
-
-    await showPage(startPage);
-    prefetch(startPage);
-    updateBookmarkUI();
-  } catch (e) {
-    console.error('Failed to open book:', e);
-    toast('書籍を開けませんでした');
-    closeReader();
-  }
+  // D&D (one-time)
+  initDragReorder();
 }
 
-// ============================================================
-// ZIP IMPORT
-// ============================================================
-async function onZipSelected(e) {
-  const files = Array.from(e.target.files);
-  if (files.length === 0) return;
-  e.target.value = '';
-
-  const bar = $('#import-bar');
-  const fill = $('#import-bar-fill');
-  const statusText = $('#import-status-text');
-
-  bar.classList.add('active');
-  statusText.classList.add('active');
-  fill.style.width = '0%';
-
-  toast(`${files.length}件のZIPをインポート中...`);
-
-  // バックグラウンドで処理
-  (async () => {
-    let totalUploaded = 0;
-    let totalImages = 0;
-
-    // まず全ZIPの画像数を数える
-    const zipData = [];
-    for (const file of files) {
-      try {
-        const buf = await file.arrayBuffer();
-        const zip = await JSZip.loadAsync(buf);
-        const entries = [];
-        zip.forEach((path, entry) => { if (!entry.dir) entries.push({ path, entry }); });
-        const imgs = entries.filter(e => IMG_RE.test(e.path));
-        if (imgs.length > 0) {
-          zipData.push({ name: file.name, folderName: file.name.replace(/\.zip$/i, ''), imgs, zip });
-          totalImages += imgs.length;
-        } else {
-          toast(`${file.name}: 画像なし`);
-        }
-      } catch (err) {
-        toast(`${file.name}: 読み込み失敗`);
-      }
-    }
-
-    for (const { name, folderName, imgs } of zipData) {
-      statusText.textContent = `${folderName}: 0/${imgs.length}枚`;
-      const bookPath = 'books/' + folderName;
-
-      try {
-        for (let i = 0; i < imgs.length; i++) {
-          const { path: entryPath, entry } = imgs[i];
-          const data = await entry.async('arraybuffer');
-          await App.storage.save(bookPath + '/' + entryPath, data);
-          totalUploaded++;
-          const pct = Math.round((totalUploaded / totalImages) * 100);
-          fill.style.width = pct + '%';
-          statusText.textContent = `${folderName}: ${i + 1}/${imgs.length}枚`;
-        }
-
-        if (!App.metadata.books[folderName]) {
-          App.metadata.books[folderName] = {
-            title: folderName, store: '', purchaseDate: '', tags: [],
-            lists: [], coverImage: '', lastReadPage: 0,
-            bindingDirection: 'rtl', totalPages: imgs.length, hiddenPaths: [],
-          };
-        } else {
-          App.metadata.books[folderName].totalPages = imgs.length;
-        }
-      } catch (err) {
-        console.error('ZIP import error:', err);
-        toast(`${name}: 失敗`);
-      }
-    }
-
-    await saveMetadata();
-    bar.classList.remove('active');
-    statusText.classList.remove('active');
-    toast(`インポート完了: ${totalUploaded}ファイル`);
-    await loadShelf();
-  })();
+function handleOpen(el) {
+  const entry = App.entries[parseInt(el.dataset.index)]; if (!entry) return;
+  if (entry['.tag'] === 'folder') navigate(entryRelPath(entry));
+  else if (IMG_EXT.has(ext(entry.name))) openViewer(entry);
 }
-
-// ============================================================
-// BOOT
-// ============================================================
-// ── ピンチズーム防止（Android対策）──
-document.addEventListener('touchstart', function(e) {
-  if (e.touches.length > 1) e.preventDefault();
-}, { passive: false });
-
-let lastTouchEnd = 0;
-document.addEventListener('touchend', function(e) {
-  const now = Date.now();
-  if (now - lastTouchEnd <= 300) e.preventDefault();
-  lastTouchEnd = now;
-}, { passive: false });
-
-document.addEventListener('gesturestart', function(e) {
-  e.preventDefault();
-}, { passive: false });
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
