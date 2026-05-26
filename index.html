@@ -1122,6 +1122,20 @@
   }
   .bmlist-detail-read:hover { opacity: 0.85; }
   .bmlist-detail-read:disabled { opacity: 0.4; cursor: default; }
+  .bmlist-detail-export {
+    background: none;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .bmlist-detail-export:hover { background: rgba(255,255,255,0.06); }
+  .bmlist-detail-export:disabled { opacity: 0.4; cursor: default; }
 
   /* Draggable items in bmlist detail */
   .bmlist-item {
@@ -3631,11 +3645,16 @@ function renderBmListDetail(body, listName) {
   header.innerHTML = `
     <button class="bmlist-detail-back">←</button>
     <div class="bmlist-detail-title">${listName}（${items.length}ページ）</div>
+    <button class="bmlist-detail-export" ${items.length === 0 ? 'disabled' : ''}>🖼 画像出力</button>
     <button class="bmlist-detail-read" ${items.length === 0 ? 'disabled' : ''}>▶ 読む</button>
   `;
   header.querySelector('.bmlist-detail-back').onclick = () => {
     App.bmBrowserDetail = null;
     renderBmBrowser();
+  };
+  header.querySelector('.bmlist-detail-export').onclick = () => {
+    if (items.length === 0) return;
+    exportBmListImages(listName);
   };
   header.querySelector('.bmlist-detail-read').onclick = () => {
     if (items.length === 0) return;
@@ -3788,6 +3807,92 @@ function setupBmListDrag(container, items, listName, bodyEl) {
     touchRow = null;
     touchIdx = null;
   });
+}
+
+// ============================================================
+// BM LIST IMAGE EXPORT (write bookmarked pages to a Dropbox folder)
+// ============================================================
+function sanitizeForPath(s) {
+  return String(s).replace(/[\/\\:*?"<>|]/g, '_').replace(/^\.+/, '').trim();
+}
+
+async function exportBmListImages(listName) {
+  const list = App.metadata.bmLists[listName];
+  if (!list || !list.items || list.items.length === 0) {
+    toast('空のマイリストです');
+    return;
+  }
+
+  // Ask the user for a destination folder name inside Dropbox
+  const suggested = sanitizeForPath(listName) || 'マイリスト';
+  const input = prompt('出力先フォルダ名（Dropbox の BookViewer 内に作成）', suggested);
+  if (input === null) return; // cancelled
+  const folderName = sanitizeForPath(input);
+  if (!folderName) { toast('フォルダ名が無効です'); return; }
+  if (folderName === 'books' || folderName === 'metadata.json') {
+    toast('その名前は使用できません');
+    return;
+  }
+
+  // Resolve each item's Dropbox image path (group by book to avoid redundant scans)
+  const bookPathCache = {};
+  const bookIds = [...new Set(list.items.map(i => i.bookId))];
+  for (const bookId of bookIds) {
+    const meta = App.metadata.books[bookId] || {};
+    try {
+      const images = await listImagesRecursive('books/' + bookId, meta.hiddenPaths);
+      bookPathCache[bookId] = images.map(e => e.path);
+    } catch (e) {
+      bookPathCache[bookId] = [];
+    }
+  }
+
+  // Build jobs preserving the list's (reorderable) order
+  const jobs = [];
+  for (const item of list.items) {
+    const paths = bookPathCache[item.bookId] || [];
+    if (item.page < paths.length) {
+      jobs.push({ bookId: item.bookId, page: item.page, path: paths[item.page] });
+    }
+  }
+  if (jobs.length === 0) {
+    toast('出力できるページがありません（未ダウンロード？）');
+    return;
+  }
+
+  const bar = $('#import-bar');
+  const fill = $('#import-bar-fill');
+  const statusText = $('#import-status-text');
+  bar.classList.add('active');
+  statusText.classList.add('active');
+  fill.style.width = '0%';
+  statusText.textContent = `画像出力: 0/${jobs.length}枚`;
+
+  let done = 0, failed = 0;
+  const pad = String(jobs.length).length;
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i];
+    try {
+      let buf = await App.storage.loadBinary(job.path);
+      // Normalize to ArrayBuffer (the type ZIP import feeds to save())
+      if (buf instanceof Blob) buf = await buf.arrayBuffer();
+      else if (ArrayBuffer.isView(buf)) buf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+      const ext = job.path.split('.').pop().toLowerCase();
+      const seq = String(i + 1).padStart(pad, '0');
+      const outPath = `${folderName}/${seq}_${sanitizeForPath(job.bookId)}_p${job.page + 1}.${ext}`;
+      await App.storage.save(outPath, buf);
+      done++;
+    } catch (e) {
+      console.error('Image export failed:', job, e);
+      failed++;
+    }
+    fill.style.width = Math.round(((i + 1) / jobs.length) * 100) + '%';
+    statusText.textContent = `画像出力: ${i + 1}/${jobs.length}枚`;
+  }
+
+  bar.classList.remove('active');
+  statusText.classList.remove('active');
+  toast(`${folderName}/ に出力しました（${done}枚${failed ? ` / ${failed}件失敗` : ''}）`);
 }
 
 // ============================================================
