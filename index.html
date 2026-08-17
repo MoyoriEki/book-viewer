@@ -129,6 +129,9 @@
   }
   .shelf-tabs::-webkit-scrollbar { display: none; }
   .shelf-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 10px 18px;
     font-size: 13px;
     font-weight: 400;
@@ -141,12 +144,28 @@
     border-top: none;
     border-left: none;
     border-right: none;
+    user-select: none;
   }
   .shelf-tab:hover { color: var(--text); }
   .shelf-tab.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
   }
+  .shelf-tab.deletable { padding-right: 8px; }
+  .shelf-tab-del {
+    font-size: 10px;
+    line-height: 1;
+    padding: 3px 4px;
+    border: none;
+    border-radius: 3px;
+    background: none;
+    color: #555;
+    cursor: pointer;
+    font-family: inherit;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .shelf-tab-del:hover { color: var(--danger); background: rgba(255,255,255,0.08); }
 
   /* Book grid */
   .shelf-grid-wrap {
@@ -1508,6 +1527,10 @@
       </div>
     </div>
     <div style="margin-top:8px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">リスト管理</div>
+      <div class="hidden-list" id="list-manage" style="max-height:200px;margin-bottom:12px;"></div>
+    </div>
+    <div style="margin-top:8px;">
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">非表示の作品 <span id="hidden-count" style="color:#555;"></span></div>
       <div class="hidden-list" id="hidden-list"></div>
     </div>
@@ -1840,9 +1863,12 @@ function renderTabs() {
   const lists = ['すべて', 'DL済み', 'ふぁぼ', ...Object.keys(App.metadata.lists).filter(k => k !== 'ふぁぼ')];
   container.innerHTML = '';
   for (const name of lists) {
-    const tab = document.createElement('button');
-    tab.className = 'shelf-tab' + (App.currentList === name ? ' active' : '');
-    tab.textContent = name;
+    const deletable = isDeletableList(name);
+    const tab = document.createElement('div');
+    tab.className = 'shelf-tab' + (App.currentList === name ? ' active' : '') + (deletable ? ' deletable' : '');
+    const label = document.createElement('span');
+    label.textContent = name;
+    tab.appendChild(label);
     tab.onclick = () => {
       App.currentList = name;
       App.shelfPage = 0;
@@ -1856,6 +1882,17 @@ function renderTabs() {
       renderTabs();
       renderGrid();
     };
+    if (deletable) {
+      const del = document.createElement('button');
+      del.className = 'shelf-tab-del';
+      del.textContent = '✕';
+      del.title = `「${name}」を削除`;
+      del.onclick = (e) => {
+        e.stopPropagation();
+        deleteList(name);
+      };
+      tab.appendChild(del);
+    }
     container.appendChild(tab);
   }
 }
@@ -2439,7 +2476,7 @@ function removeFromList(bookId, listName) {
 async function createNewList() {
   const name = $('#input-list-name').value.trim();
   if (!name) return;
-  if (name === 'すべて' || name === 'ふぁぼ' || App.metadata.lists[name]) {
+  if (BUILTIN_LISTS.includes(name) || App.metadata.lists[name]) {
     toast('この名前は使えません');
     return;
   }
@@ -2448,6 +2485,58 @@ async function createNewList() {
   hideModal('modal-new-list');
   renderTabs();
   toast(`「${name}」を作成`);
+}
+
+// 「すべて」「DL済み」は仮想タブ、「ふぁぼ」は既定リストなので削除不可
+const BUILTIN_LISTS = ['すべて', 'DL済み', 'ふぁぼ'];
+
+function isDeletableList(name) {
+  return !BUILTIN_LISTS.includes(name) && !!(App.metadata.lists && App.metadata.lists[name]);
+}
+
+function countBooksInList(listName) {
+  return Object.values(App.metadata.books || {})
+    .filter(meta => meta.lists && meta.lists.includes(listName)).length;
+}
+
+async function deleteList(listName) {
+  if (!isDeletableList(listName)) {
+    toast('このリストは削除できません');
+    return;
+  }
+
+  const count = countBooksInList(listName);
+  const msg = count > 0
+    ? `リスト「${listName}」を削除しますか？\n${count}作品がこのリストから外れます（作品自体は削除されません）。`
+    : `リスト「${listName}」を削除しますか？`;
+  if (!confirm(msg)) return;
+
+  // リスト本体（並び順を含む）を削除
+  delete App.metadata.lists[listName];
+
+  // 各作品の所属からも取り除く
+  for (const meta of Object.values(App.metadata.books || {})) {
+    if (!meta.lists) continue;
+    if (meta.lists.includes(listName)) {
+      meta.lists = meta.lists.filter(l => l !== listName);
+    }
+  }
+
+  // 削除したリストを表示中なら「すべて」へ戻す
+  if (App.currentList === listName) {
+    App.currentList = 'すべて';
+    App.shelfPage = 0;
+    if (App.currentSort === 'custom') {
+      App.currentSort = 'purchase_desc';
+      const sortEl = $('#shelf-sort');
+      if (sortEl) sortEl.value = App.currentSort;
+    }
+  }
+
+  await saveMetadata();
+  renderTabs();
+  renderGrid();
+  toast(`「${listName}」を削除`);
 }
 
 // ============================================================
@@ -2502,6 +2591,30 @@ function openSettingsModal() {
         openSettingsModal();
       };
       list.appendChild(row);
+    }
+  }
+
+  // リスト管理（自分で作ったリストの削除）
+  const manage = $('#list-manage');
+  const userLists = Object.keys(App.metadata.lists || {}).filter(isDeletableList);
+  if (userLists.length === 0) {
+    manage.innerHTML = '<div style="color:#555;font-size:11px;padding:12px 0;text-align:center;">作成したリストはありません</div>';
+  } else {
+    manage.innerHTML = '';
+    for (const name of userLists) {
+      const row = document.createElement('div');
+      row.className = 'hidden-entry';
+      row.innerHTML = `
+        <span class="hidden-entry-title"></span>
+        <span class="hidden-entry-store">${countBooksInList(name)}作品</span>
+        <button class="hidden-entry-restore" style="color:var(--danger);border-color:var(--danger);">削除</button>
+      `;
+      row.querySelector('.hidden-entry-title').textContent = name;
+      row.querySelector('.hidden-entry-restore').onclick = async () => {
+        await deleteList(name);
+        openSettingsModal();
+      };
+      manage.appendChild(row);
     }
   }
 
