@@ -356,6 +356,40 @@
     outline: none;
   }
   .shelf-sort-select:focus { border-color: var(--accent); }
+  .shelf-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .shelf-search-input {
+    font-size: 10px;
+    padding: 2px 18px 2px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    outline: none;
+    width: 130px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .shelf-search-input:focus { border-color: var(--accent); }
+  .shelf-search-input::placeholder { color: #444; }
+  .shelf-search-input::-webkit-search-cancel-button { display: none; }
+  .shelf-search-clear {
+    position: absolute;
+    right: 2px;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 4px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .shelf-search-clear:hover { color: var(--text); }
   .shelf-book-count {
     font-size: 10px;
     color: #444;
@@ -1429,6 +1463,18 @@
       <button class="shelf-pill" data-store="other">その他</button>
     </div>
     <div class="shelf-control-group">
+      <span class="shelf-control-label">ジャンル:</span>
+      <button class="shelf-pill active" data-genre="mangacg">マンガ・CG集</button>
+      <button class="shelf-pill" data-genre="all">すべて</button>
+    </div>
+    <div class="shelf-control-group">
+      <span class="shelf-control-label">サークル:</span>
+      <div class="shelf-search-wrap">
+        <input type="search" class="shelf-search-input" id="shelf-maker-search" placeholder="サークル名で検索" autocomplete="off">
+        <button class="shelf-search-clear" id="shelf-maker-clear" title="クリア" style="display:none;">✕</button>
+      </div>
+    </div>
+    <div class="shelf-control-group">
       <span class="shelf-control-label">並び順:</span>
       <select class="shelf-sort-select" id="shelf-sort">
         <option value="purchase_desc">購入日 新→古</option>
@@ -1598,6 +1644,8 @@ const App = {
   metadata: null,
   currentList: 'すべて',
   currentStore: 'all',
+  currentGenre: 'mangacg', // 'mangacg' = マンガ・CG集のみ / 'all' = 全ジャンル
+  makerQuery: '',    // サークル名の検索文字列
   currentSort: 'purchase_desc',
   shelfPage: 0,      // 本棚のページネーション（100冊ごと）
   currentBook: null,
@@ -1738,6 +1786,45 @@ function init() {
       renderGrid();
     };
   });
+
+  // Genre filter pills
+  document.querySelectorAll('.shelf-pill[data-genre]').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.shelf-pill[data-genre]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      App.currentGenre = btn.dataset.genre;
+      App.shelfPage = 0;
+      renderGrid();
+    };
+  });
+
+  // Maker (circle) name search
+  const makerInput = $('#shelf-maker-search');
+  const makerClear = $('#shelf-maker-clear');
+  let makerTimer = null;
+  makerInput.addEventListener('input', () => {
+    makerClear.style.display = makerInput.value ? '' : 'none';
+    clearTimeout(makerTimer);
+    makerTimer = setTimeout(() => {
+      App.makerQuery = makerInput.value;
+      App.shelfPage = 0;
+      renderGrid();
+    }, 150);
+  });
+  makerInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      makerClear.onclick();
+    }
+  });
+  makerClear.onclick = () => {
+    clearTimeout(makerTimer);
+    makerInput.value = '';
+    makerClear.style.display = 'none';
+    App.makerQuery = '';
+    App.shelfPage = 0;
+    renderGrid();
+  };
 
   // Sort select
   $('#shelf-sort').onchange = () => {
@@ -2013,6 +2100,63 @@ function renderTabs() {
   }
 }
 
+// 検索用の正規化（全角半角・大文字小文字・カタカナひらがな・空白を吸収）
+function normalizeSearch(s) {
+  return (s || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[\s　]+/g, '');
+}
+
+// ------------------------------------------------------------
+// ジャンル（作品形式）判定
+// DLsite の work_type コード、または日本語の形式名から
+// 「マンガ・CG集」かどうかを判定する。
+// 判定材料が無い本は除外せずに残す（ZIP取り込みや自炊本のため）。
+// ------------------------------------------------------------
+const GENRE_TYPE_FIELDS = ['workType', 'work_type', 'workFormat', 'genre', 'category', 'format'];
+const MANGA_CG_CODES = ['mng', 'icg', 'comic', 'manga', 'cg'];
+// DLsite の作品形式コードのうちマンガ・CG集以外のもの
+const OTHER_GENRE_CODES = [
+  'sou', 'mov', 'mus', 'nre', 'dnv', 'vcm', 'gam', 'rpg', 'adv', 'act', 'acn',
+  'stg', 'pzl', 'qiz', 'sim', 'sln', 'tbl', 'tol', 'imt', 'amt', 'ksv', 'wbt', 'dgt', 'etc',
+];
+const MANGA_CG_WORDS = ['マンガ', '漫画', 'コミック', 'cg', 'イラスト', '画集', '同人誌', '写真集'];
+const OTHER_GENRE_WORDS = ['ボイス', '音声', 'asmr', '動画', 'ビデオ', 'アニメ', 'ゲーム', 'ノベル', '小説', '音楽', 'ツール', 'アクセサリ', 'ソフトウェア', 'その他'];
+
+function matchesAny(text, words) {
+  return words.some(w => text.includes(w));
+}
+
+function isMangaOrCgBook(meta) {
+  if (!meta) return true;
+
+  // 明示的な作品形式フィールドがあればそれを優先
+  for (const field of GENRE_TYPE_FIELDS) {
+    const raw = meta[field];
+    if (!raw || typeof raw !== 'string') continue;
+    const v = raw.trim().toLowerCase();
+    if (!v) continue;
+    if (MANGA_CG_CODES.includes(v)) return true;
+    if (OTHER_GENRE_CODES.includes(v)) return false;
+    // 「ボイスコミック」のような複合名を取り違えないよう、除外語を先に見る
+    if (matchesAny(v, OTHER_GENRE_WORDS)) return false;
+    if (matchesAny(v, MANGA_CG_WORDS)) return true;
+    // 未知のコード・形式名は判断できないので次のフィールドへ
+  }
+
+  // 形式フィールドが無ければタグから推測
+  if (Array.isArray(meta.tags) && meta.tags.length) {
+    const tags = meta.tags.map(t => String(t).toLowerCase());
+    if (tags.some(t => matchesAny(t, MANGA_CG_WORDS))) return true;
+    if (tags.some(t => matchesAny(t, OTHER_GENRE_WORDS))) return false;
+  }
+
+  // 判定材料なし → 表示する
+  return true;
+}
+
 function getFilteredBooks() {
   let books = App.bookFolders;
 
@@ -2037,6 +2181,20 @@ function getFilteredBooks() {
       const store = (meta && meta.store) || '';
       if (App.currentStore === 'other') return !store || (store !== 'dlsite' && store !== 'fanza' && store !== 'kindle');
       return store === App.currentStore;
+    });
+  }
+
+  // Genre filter (マンガ・CG集以外を非表示)
+  if (App.currentGenre !== 'all') {
+    books = books.filter(f => isMangaOrCgBook(App.metadata.books[f.id]));
+  }
+
+  // Maker (circle) name search
+  const makerQuery = normalizeSearch(App.makerQuery);
+  if (makerQuery) {
+    books = books.filter(f => {
+      const meta = App.metadata.books[f.id];
+      return normalizeSearch(meta && meta.makerName).includes(makerQuery);
     });
   }
 
@@ -2088,11 +2246,17 @@ function renderGrid() {
   if (countEl) countEl.textContent = `${allBooks.length}冊`;
 
   if (allBooks.length === 0) {
+    const query = App.makerQuery.trim();
     grid.innerHTML = `
       <div class="shelf-empty" style="grid-column: 1 / -1;">
         <div class="shelf-empty-icon">📚</div>
-        <div>${App.currentList === 'すべて' ? 'Dropbox の BookViewer/books/ にフォルダを追加してください' : 'このリストは空です'}</div>
+        <div class="shelf-empty-msg"></div>
       </div>`;
+    grid.querySelector('.shelf-empty-msg').textContent = query
+      ? `「${query}」に一致するサークルはありません`
+      : (App.currentList === 'すべて'
+        ? 'Dropbox の BookViewer/books/ にフォルダを追加してください'
+        : 'このリストは空です');
     renderPagination(0);
     return;
   }
@@ -2519,6 +2683,12 @@ async function autoFetchDLsiteMeta(bookId) {
       meta.title = title;
       meta.store = 'dlsite';
       meta.dlsiteId = bookId;
+      // 作品形式（ジャンル絞り込みに使用）
+      const workType = w.work_type || w.work_type_string || (w.work_type_name && (w.work_type_name.ja || w.work_type_name));
+      if (typeof workType === 'string' && workType) meta.workType = workType;
+      // サークル名（検索に使用）
+      const makerName = w.maker_name || (w.maker && (w.maker.name || w.maker.name_ja)) || w.circle_name;
+      if (typeof makerName === 'string' && makerName && !meta.makerName) meta.makerName = makerName;
       // タグ
       if (w.genre && Array.isArray(w.genre)) {
         const tags = ['同人'];
