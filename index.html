@@ -2505,15 +2505,17 @@ function renderGrid() {
     });
 
     // Long press for mobile
-    let longTimer;
     card.addEventListener('touchstart', (e) => {
-      longTimer = setTimeout(() => {
-        const touch = e.touches[0];
-        showCtxMenu(touch.clientX, touch.clientY, book.id);
+      cancelCardLongPress();
+      const touch = e.touches[0];
+      const x = touch.clientX, y = touch.clientY;
+      cardLongPressTimer = setTimeout(() => {
+        cardLongPressTimer = null;
+        showCtxMenu(x, y, book.id);
       }, 600);
     }, { passive: true });
-    card.addEventListener('touchend', () => clearTimeout(longTimer));
-    card.addEventListener('touchmove', () => clearTimeout(longTimer));
+    card.addEventListener('touchend', cancelCardLongPress);
+    card.addEventListener('touchmove', cancelCardLongPress);
 
     grid.appendChild(card);
   }
@@ -2583,6 +2585,14 @@ function goToShelfPage(page) {
 // ============================================================
 // DRAG REORDER
 // ============================================================
+// 長押しのコンテキストメニュー用タイマー。ドラッグが始まったら取り消せるよう
+// カード間で共有する（同時に押せるのは1枚なので1つで足りる）
+let cardLongPressTimer = null;
+function cancelCardLongPress() {
+  clearTimeout(cardLongPressTimer);
+  cardLongPressTimer = null;
+}
+
 function setupDragReorder(grid, books) {
   let dragId = null;
 
@@ -2622,6 +2632,22 @@ function setupDragReorder(grid, books) {
   let touchDragEl = null;
   let touchDragId = null;
   let touchClone = null;
+  let touchTimer = null;
+  let touchOffsetX = 0;
+  let touchOffsetY = 0;
+
+  function cancelTouchTimer() {
+    clearTimeout(touchTimer);
+    touchTimer = null;
+  }
+
+  function endTouchDrag() {
+    if (touchDragEl) touchDragEl.classList.remove('dragging');
+    grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+    if (touchClone) { touchClone.remove(); touchClone = null; }
+    touchDragEl = null;
+    touchDragId = null;
+  }
 
   grid.addEventListener('touchstart', (e) => {
     if (App.currentSort !== 'custom') return;
@@ -2630,54 +2656,68 @@ function setupDragReorder(grid, books) {
     const idx = parseInt(card.dataset.dragIdx);
     if (isNaN(idx)) return;
 
-    // 長押しでドラッグ開始
-    const startY = e.touches[0].clientY;
     const startX = e.touches[0].clientX;
-    const timer = setTimeout(() => {
+    const startY = e.touches[0].clientY;
+
+    // 長押しでドラッグ開始
+    cancelTouchTimer();
+    touchTimer = setTimeout(() => {
+      touchTimer = null;
+      // ドラッグ中にコンテキストメニューが出てこないようにする
+      cancelCardLongPress();
+      hideCtxMenu();
+
+      const rect = card.getBoundingClientRect();
       touchDragEl = card;
       touchDragId = books[idx].id;
+      touchOffsetX = startX - rect.left;
+      touchOffsetY = startY - rect.top;
       card.classList.add('dragging');
 
+      // カードは height:100% なので、グリッドの外に出すと画面いっぱいに
+      // 伸びてしまう。実寸を指定して元のカードと同じ大きさに固定する。
       touchClone = card.cloneNode(true);
-      touchClone.style.cssText = `position:fixed;pointer-events:none;z-index:9999;opacity:0.8;width:${card.offsetWidth}px;top:${startY - 30}px;left:${startX - card.offsetWidth/2}px;`;
+      touchClone.classList.remove('dragging', 'drag-over');
+      touchClone.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:9999;opacity:0.85;'
+        + `width:${rect.width}px;height:${rect.height}px;left:${rect.left}px;top:${rect.top}px;`;
       document.body.appendChild(touchClone);
     }, 400);
-
-    const cancel = () => { clearTimeout(timer); };
-    card.addEventListener('touchend', cancel, { once: true });
-    card.addEventListener('touchmove', (me) => {
-      if (!touchDragEl) { cancel(); return; }
-      me.preventDefault();
-      const ty = me.touches[0].clientY;
-      const tx = me.touches[0].clientX;
-      if (touchClone) {
-        touchClone.style.top = (ty - 30) + 'px';
-        touchClone.style.left = (tx - touchClone.offsetWidth/2) + 'px';
-      }
-      // Highlight drop target
-      grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-      const el = document.elementFromPoint(tx, ty);
-      const target = el && el.closest('.book-card');
-      if (target && target !== touchDragEl) target.classList.add('drag-over');
-    }, { passive: false });
   }, { passive: true });
 
+  grid.addEventListener('touchmove', (e) => {
+    if (!touchDragEl) { cancelTouchTimer(); return; }
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (touchClone) {
+      touchClone.style.left = (touch.clientX - touchOffsetX) + 'px';
+      touchClone.style.top = (touch.clientY - touchOffsetY) + 'px';
+    }
+    // Highlight drop target
+    grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const target = el && el.closest('.book-card');
+    if (target && target !== touchDragEl) target.classList.add('drag-over');
+  }, { passive: false });
+
   grid.addEventListener('touchend', (e) => {
+    cancelTouchTimer();
     if (!touchDragEl) return;
     const touch = e.changedTouches[0];
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
     const target = el && el.closest('.book-card');
-    if (target && target !== touchDragEl) {
+    const dragId = touchDragId;
+    endTouchDrag();
+    if (target) {
       const dropIdx = parseInt(target.dataset.dragIdx);
-      if (!isNaN(dropIdx)) {
-        reorderList(App.currentList, touchDragId, books[dropIdx].id, books);
+      if (!isNaN(dropIdx) && books[dropIdx].id !== dragId) {
+        reorderList(App.currentList, dragId, books[dropIdx].id, books);
       }
     }
-    touchDragEl.classList.remove('dragging');
-    grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    if (touchClone) { touchClone.remove(); touchClone = null; }
-    touchDragEl = null;
-    touchDragId = null;
+  });
+
+  grid.addEventListener('touchcancel', () => {
+    cancelTouchTimer();
+    endTouchDrag();
   });
 }
 
@@ -4499,7 +4539,10 @@ function setupBmListDrag(container, items, listName, bodyEl) {
 
     const rect = row.getBoundingClientRect();
     touchClone = row.cloneNode(true);
-    touchClone.style.cssText = `position:fixed;pointer-events:none;z-index:9999;opacity:0.8;width:${rect.width}px;top:${rect.top}px;left:${rect.left}px;`;
+    touchClone.classList.remove('dragging', 'drag-over');
+    // 元の行と同じ大きさに固定する（親から外れて伸びるのを防ぐ）
+    touchClone.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:9999;opacity:0.85;'
+      + `width:${rect.width}px;height:${rect.height}px;left:${rect.left}px;top:${rect.top}px;`;
     document.body.appendChild(touchClone);
   }, { passive: false });
 
@@ -4508,7 +4551,7 @@ function setupBmListDrag(container, items, listName, bodyEl) {
     e.preventDefault();
     const ty = e.touches[0].clientY;
     const tx = e.touches[0].clientX;
-    if (touchClone) touchClone.style.top = (ty - 25) + 'px';
+    if (touchClone) touchClone.style.top = (ty - touchClone.offsetHeight / 2) + 'px';
     container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
     const el = document.elementFromPoint(tx, ty);
     const target = el && el.closest('.bmlist-item');
@@ -4530,6 +4573,14 @@ function setupBmListDrag(container, items, listName, bodyEl) {
       }
     }
     touchRow.classList.remove('dragging');
+    container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    if (touchClone) { touchClone.remove(); touchClone = null; }
+    touchRow = null;
+    touchIdx = null;
+  });
+
+  container.addEventListener('touchcancel', () => {
+    if (touchRow) touchRow.classList.remove('dragging');
     container.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
     if (touchClone) { touchClone.remove(); touchClone = null; }
     touchRow = null;
