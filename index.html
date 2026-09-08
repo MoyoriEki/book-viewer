@@ -1468,10 +1468,10 @@
       <button class="shelf-pill" data-genre="all">すべて</button>
     </div>
     <div class="shelf-control-group">
-      <span class="shelf-control-label">サークル:</span>
+      <span class="shelf-control-label">検索:</span>
       <div class="shelf-search-wrap">
-        <input type="search" class="shelf-search-input" id="shelf-maker-search" placeholder="サークル名で検索" autocomplete="off">
-        <button class="shelf-search-clear" id="shelf-maker-clear" title="クリア" style="display:none;">✕</button>
+        <input type="search" class="shelf-search-input" id="shelf-search" placeholder="作品名・サークル名" autocomplete="off">
+        <button class="shelf-search-clear" id="shelf-search-clear" title="クリア" style="display:none;">✕</button>
       </div>
     </div>
     <div class="shelf-control-group">
@@ -1645,7 +1645,7 @@ const App = {
   currentList: 'すべて',
   currentStore: 'all',
   currentGenre: 'mangacg', // 'mangacg' = マンガ・CG集のみ / 'all' = 全ジャンル
-  makerQuery: '',    // サークル名の検索文字列
+  searchQuery: '',   // 作品名・サークル名の検索文字列
   currentSort: 'purchase_desc',
   shelfPage: 0,      // 本棚のページネーション（100冊ごと）
   currentBook: null,
@@ -1798,30 +1798,29 @@ function init() {
     };
   });
 
-  // Maker (circle) name search
-  const makerInput = $('#shelf-maker-search');
-  const makerClear = $('#shelf-maker-clear');
-  let makerTimer = null;
-  makerInput.addEventListener('input', () => {
-    makerClear.style.display = makerInput.value ? '' : 'none';
-    clearTimeout(makerTimer);
-    makerTimer = setTimeout(() => {
-      App.makerQuery = makerInput.value;
+  // Title / maker (circle) name search
+  const searchInput = $('#shelf-search');
+  const searchClear = $('#shelf-search-clear');
+  searchInput.addEventListener('input', () => {
+    searchClear.style.display = searchInput.value ? '' : 'none';
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      App.searchQuery = searchInput.value;
       App.shelfPage = 0;
       renderGrid();
     }, 150);
   });
-  makerInput.addEventListener('keydown', (e) => {
+  searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      makerClear.onclick();
+      searchClear.onclick();
     }
   });
-  makerClear.onclick = () => {
-    clearTimeout(makerTimer);
-    makerInput.value = '';
-    makerClear.style.display = 'none';
-    App.makerQuery = '';
+  searchClear.onclick = () => {
+    clearTimeout(searchTimer);
+    searchInput.value = '';
+    searchClear.style.display = 'none';
+    App.searchQuery = '';
     App.shelfPage = 0;
     renderGrid();
   };
@@ -2100,6 +2099,21 @@ function renderTabs() {
   }
 }
 
+// 検索ボックスの入力デバウンス用
+let searchTimer = null;
+
+// 検索ボックスに文字列をセットして本棚を絞り込む
+function setSearchQuery(query) {
+  clearTimeout(searchTimer);
+  const input = $('#shelf-search');
+  const clear = $('#shelf-search-clear');
+  if (input) input.value = query;
+  if (clear) clear.style.display = query ? '' : 'none';
+  App.searchQuery = query;
+  App.shelfPage = 0;
+  renderGrid();
+}
+
 // 検索用の正規化（全角半角・大文字小文字・カタカナひらがな・空白を吸収）
 function normalizeSearch(s) {
   return (s || '')
@@ -2189,12 +2203,13 @@ function getFilteredBooks() {
     books = books.filter(f => isMangaOrCgBook(App.metadata.books[f.id]));
   }
 
-  // Maker (circle) name search
-  const makerQuery = normalizeSearch(App.makerQuery);
-  if (makerQuery) {
+  // Title / maker (circle) name search
+  const query = normalizeSearch(App.searchQuery);
+  if (query) {
     books = books.filter(f => {
-      const meta = App.metadata.books[f.id];
-      return normalizeSearch(meta && meta.makerName).includes(makerQuery);
+      const meta = App.metadata.books[f.id] || {};
+      return normalizeSearch(meta.title || f.id).includes(query)
+        || normalizeSearch(meta.makerName).includes(query);
     });
   }
 
@@ -2246,14 +2261,14 @@ function renderGrid() {
   if (countEl) countEl.textContent = `${allBooks.length}冊`;
 
   if (allBooks.length === 0) {
-    const query = App.makerQuery.trim();
+    const query = App.searchQuery.trim();
     grid.innerHTML = `
       <div class="shelf-empty" style="grid-column: 1 / -1;">
         <div class="shelf-empty-icon">📚</div>
         <div class="shelf-empty-msg"></div>
       </div>`;
     grid.querySelector('.shelf-empty-msg').textContent = query
-      ? `「${query}」に一致するサークルはありません`
+      ? `「${query}」に一致する作品はありません`
       : (App.currentList === 'すべて'
         ? 'Dropbox の BookViewer/books/ にフォルダを追加してください'
         : 'このリストは空です');
@@ -3003,6 +3018,12 @@ function showCtxMenu(x, y, bookId) {
     if (storeUrl) html += `<div class="ctx-item" data-action="store">作品ページ ↗</div>`;
   }
 
+  // Search the shelf by this book's circle name
+  if (meta.makerName) {
+    if (!storeUrl && !dlUrl) html += `<div class="ctx-divider"></div>`;
+    html += `<div class="ctx-item" data-action="searchmaker">サークル名で検索 🔍</div>`;
+  }
+
   menu.innerHTML = html;
 
   // Position
@@ -3026,6 +3047,7 @@ function showCtxMenu(x, y, bookId) {
       else if (action === 'hide') hideBook(bookId);
       else if (action === 'store') { const u = getStoreUrl(bookId); if (u) window.open(u, '_blank'); }
       else if (action === 'download') { const u = getDownloadUrl(bookId); if (u) window.open(u, '_blank'); }
+      else if (action === 'searchmaker') searchByMaker(bookId);
       hideCtxMenu();
     };
   });
@@ -3033,6 +3055,18 @@ function showCtxMenu(x, y, bookId) {
 
 function hideCtxMenu() {
   $('#ctx-menu').classList.remove('show');
+}
+
+// コンテキストメニュー → その作品のサークル名で本棚を検索
+function searchByMaker(bookId) {
+  const meta = App.metadata.books[bookId] || {};
+  const maker = meta.makerName || '';
+  if (!maker) {
+    toast('サークル名が未設定');
+    return;
+  }
+  setSearchQuery(maker);
+  toast(`「${maker}」で検索`);
 }
 
 async function deleteBook(bookId) {
