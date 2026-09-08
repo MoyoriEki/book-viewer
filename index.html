@@ -1678,23 +1678,27 @@ function init() {
   App.storage.on('connected', async () => {
     showScreen('shelf');
     await loadShelf();
+    restoreFromHash();
   });
 
   App.storage.on('disconnected', () => {
+    if (App.currentBook) closeReader(true);
+    navIntendedDepth = 0;
+    history.replaceState({ screen: 'shelf', depth: 0 }, '', location.pathname + location.search);
     showScreen('connection');
   });
 
   // Check if already connected
   if (App.storage.isConnected) {
     showScreen('shelf');
-    loadShelf();
+    loadShelf().then(restoreFromHash);
   }
 
   // Event listeners
   $('#btn-disconnect').onclick = () => App.storage.disconnect();
   $('#btn-refresh').onclick = () => loadShelf();
-  $('#btn-new-list').onclick = () => showModal('modal-new-list');
-  $('#modal-cancel').onclick = () => hideModal('modal-new-list');
+  $('#btn-new-list').onclick = () => openModal('modal-new-list');
+  $('#modal-cancel').onclick = () => closeModal('modal-new-list');
 
   // Confirm / prompt dialog
   $('#confirm-ok').onclick = () => closeDialog(true);
@@ -1706,7 +1710,7 @@ function init() {
   $('#input-list-name').onkeydown = (e) => { if (e.key === 'Enter') createNewList(); };
 
   // Reader controls
-  $('#reader-back').onclick = closeReader;
+  $('#reader-back').onclick = () => closeReader();
   $('#tap-left').onclick = () => tapNav('left');
   $('#tap-right').onclick = () => tapNav('right');
   $('#tap-center').onclick = toggleToolbar;
@@ -1738,26 +1742,28 @@ function init() {
 
   // Modal overlay dismiss
   $('#modal-new-list').addEventListener('click', (e) => {
-    if (e.target === $('#modal-new-list')) hideModal('modal-new-list');
+    if (e.target === $('#modal-new-list')) closeModal('modal-new-list');
   });
   $('#modal-folder').addEventListener('click', (e) => {
-    if (e.target === $('#modal-folder')) hideModal('modal-folder');
+    if (e.target === $('#modal-folder')) closeModal('modal-folder');
   });
-  $('#folder-modal-close').onclick = () => hideModal('modal-folder');
+  $('#folder-modal-close').onclick = () => closeModal('modal-folder');
 
   // Settings modal
   $('#btn-settings').onclick = () => openSettingsModal();
 
   // Bookmark browser
   $('#btn-bm-browser').onclick = () => openBmBrowser();
-  $('#bm-browser-close').onclick = () => hideModal('modal-bm-browser');
+  $('#bm-browser-close').onclick = () => closeModal('modal-bm-browser');
   $('#modal-bm-browser').addEventListener('click', (e) => {
-    if (e.target === $('#modal-bm-browser')) hideModal('modal-bm-browser');
+    if (e.target === $('#modal-bm-browser')) closeModal('modal-bm-browser');
   });
   $('#bm-browser-tabs').addEventListener('click', (e) => {
     const tab = e.target.closest('.bm-browser-tab');
     if (!tab) return;
     App.bmBrowserTab = tab.dataset.tab;
+    // 詳細ビューから抜けるときは、その履歴も戻しておく
+    if (navState().bmDetail) navPop();
     App.bmBrowserDetail = null;
     $$('.bm-browser-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === App.bmBrowserTab));
     renderBmBrowser();
@@ -1767,14 +1773,15 @@ function init() {
   $('#btn-import').onclick = () => $('#zip-input').click();
   $('#zip-input').onchange = onZipSelected;
   $('#modal-settings').addEventListener('click', (e) => {
-    if (e.target === $('#modal-settings')) hideModal('modal-settings');
+    if (e.target === $('#modal-settings')) closeModal('modal-settings');
   });
-  $('#settings-modal-close').onclick = () => hideModal('modal-settings');
+  $('#settings-modal-close').onclick = () => closeModal('modal-settings');
 
   // Browser back/forward
   window.addEventListener('popstate', onPopState);
-  // Set initial state
-  history.replaceState({ screen: 'shelf' }, '');
+  // Set initial state (ベースとなる本棚のエントリ)
+  navIntendedDepth = 0;
+  history.replaceState({ screen: 'shelf', depth: 0 }, '');
 
   // Store filter pills
   document.querySelectorAll('.shelf-pill[data-store]').forEach(btn => {
@@ -1858,6 +1865,157 @@ function showModal(id) {
   if (input) { input.value = ''; setTimeout(() => input.focus(), 100); }
 }
 function hideModal(id) { $('#' + id).classList.remove('show'); }
+function isModalOpen(id) {
+  const el = $('#' + id);
+  return !!el && el.classList.contains('show');
+}
+
+// ============================================================
+// NAVIGATION / HISTORY
+// 履歴は「本棚（ベース）→ リーダー / モーダル / 確認ダイアログ」を
+// 積み上げたスタックとして扱う。
+//   * UI を開く操作は履歴を 1 つ積む
+//   * UI を閉じる操作は history.go() に任せ、実際の開閉は popstate で行う
+//   * popstate では state から UI を組み立て直すので、進む操作でも復元できる
+// これでブラウザの戻る/進むとアプリ内の「戻る」が一致する。
+// ============================================================
+const NAV_MODALS = ['modal-new-list', 'modal-folder', 'modal-settings', 'modal-bm-browser'];
+
+function navState() {
+  const s = history.state;
+  return (s && typeof s === 'object') ? s : { screen: 'shelf', depth: 0 };
+}
+
+// history.back() は非同期で、popstate が届くまで history.state は古いまま。
+// 「戻したあとに落ち着く深さ」を自前で持ち、連続した操作でも戻りすぎないようにする。
+let navIntendedDepth = 0;
+let navPendingPops = 0;
+
+function navDepth() { return navIntendedDepth; }
+
+// popstate 側で自前の深さを実際の履歴に合わせ直す
+function navSyncDepth(state) {
+  if (navPendingPops > 0) navPendingPops--;
+  if (navPendingPops === 0) navIntendedDepth = (state && state.depth) || 0;
+}
+
+function navUrl(state) {
+  if (state.screen === 'reader' && state.bookId) return '#read/' + encodeURIComponent(state.bookId);
+  if (state.screen === 'reader' && state.bmList) return '#bmlist/' + encodeURIComponent(state.bmList);
+  return location.pathname + location.search;
+}
+
+// mode: 'push'（履歴を1つ積む） / 'replace'（現在のエントリを差し替え） / 'none'（履歴を触らない）
+function navGo(state, mode) {
+  if (mode === 'none') return;
+  const target = Object.assign({}, state);
+  if (mode === 'replace') {
+    target.depth = navIntendedDepth;
+    history.replaceState(target, '', navUrl(target));
+  } else {
+    target.depth = navIntendedDepth + 1;
+    history.pushState(target, '', navUrl(target));
+    navIntendedDepth = target.depth;
+  }
+}
+
+// 指定した深さまで履歴を戻す。戻る先が無ければ false（呼び出し側で自力で閉じる）
+function navBackTo(depth) {
+  // ベース（本棚）より前には戻さない。アプリの外に出てしまうため。
+  const target = Math.max(0, depth);
+  const diff = navIntendedDepth - target;
+  if (diff > 0) {
+    navIntendedDepth = target;
+    navPendingPops++;
+    history.go(-diff);
+    return true;
+  }
+  return false;
+}
+
+// 1つだけ戻す
+function navPop() { return navBackTo(navIntendedDepth - 1); }
+
+// 履歴に残っている state から画面を組み立て直す
+function applyNavState(state) {
+  const s = (state && typeof state === 'object') ? state : { screen: 'shelf', depth: 0 };
+  hideCtxMenu();
+
+  // 確認ダイアログ（戻る操作はキャンセル扱い）
+  if (!s.dialog) closeDialog(false);
+
+  // 画面
+  if (s.screen === 'reader' && s.bookId) {
+    if (App.currentBook !== s.bookId || App.bmListMode) openReader(s.bookId, 'none');
+  } else if (s.screen === 'reader' && s.bmList) {
+    if (App.bmListMode !== s.bmList) openBmListReader(s.bmList, 'none');
+  } else if (App.currentBook) {
+    closeReader(true);
+  }
+
+  // モーダル
+  for (const id of NAV_MODALS) {
+    if (s.modal !== id && isModalOpen(id)) hideModal(id);
+  }
+  if (s.modal) restoreModalForState(s);
+}
+
+// 進む操作などで閉じているモーダルを開き直す
+function restoreModalForState(s) {
+  if (s.modal === 'modal-bm-browser') {
+    if (!isModalOpen('modal-bm-browser')) openBmBrowser('none');
+    if ((App.bmBrowserDetail || null) !== (s.bmDetail || null)) {
+      App.bmBrowserDetail = s.bmDetail || null;
+      renderBmBrowser();
+    }
+    return;
+  }
+  if (isModalOpen(s.modal)) return;
+  if (s.modal === 'modal-folder' && s.bookId) openFolderBrowser(s.bookId, 'none');
+  else if (s.modal === 'modal-settings') openSettingsModal('none');
+  else showModal(s.modal);
+}
+
+// モーダルを開く（履歴を1つ積む。開いているモーダルの再描画では積まない）
+function openModal(id, extra) {
+  if (isModalOpen(id)) return;
+  const base = navDepth();
+  showModal(id);
+  navGo(Object.assign({ screen: 'shelf', modal: id, modalBase: base }, extra || {}), 'push');
+}
+
+// モーダルを閉じる（履歴を戻して popstate 側で閉じる）
+function closeModal(id) {
+  const s = navState();
+  if (s.modal === id && navBackTo(s.modalBase || 0)) return;
+  hideModal(id);
+}
+
+// URL のハッシュからリーダーを復元する（リロードや共有リンク対策）
+function restoreFromHash() {
+  const hash = location.hash || '';
+  let m = hash.match(/^#read\/(.+)$/);
+  if (m) {
+    const bookId = decodeURIComponent(m[1]);
+    if (App.metadata && App.metadata.books && App.metadata.books[bookId]) {
+      openReader(bookId, 'replace');
+      return;
+    }
+  }
+  m = hash.match(/^#bmlist\/(.+)$/);
+  if (m) {
+    const name = decodeURIComponent(m[1]);
+    if (App.metadata && App.metadata.bmLists && App.metadata.bmLists[name]) {
+      openBmListReader(name, 'replace');
+      return;
+    }
+  }
+  // 開けないハッシュは消しておく
+  if (hash) {
+    navIntendedDepth = 0;
+    history.replaceState({ screen: 'shelf', depth: 0 }, '', location.pathname + location.search);
+  }
+}
 
 // ============================================================
 // CONFIRM / PROMPT DIALOG
@@ -1870,8 +2028,8 @@ let _dialogResolve = null;
 
 function openDialog(opts) {
   const o = opts || {};
-  // 既に開いているものがあればキャンセル扱いで閉じる
-  if (_dialogResolve) closeDialog(false);
+  // 既に開いているものがあればキャンセル扱いで閉じる（履歴はそのまま使い回す）
+  if (_dialogResolve) closeDialog(false, true);
 
   $('#confirm-title').textContent = o.title || '確認';
   $('#confirm-message').textContent = o.message || '';
@@ -1888,6 +2046,8 @@ function openDialog(opts) {
   $('#confirm-cancel').textContent = o.cancelText || 'キャンセル';
 
   $('#modal-confirm').classList.add('show');
+  // 戻る操作でダイアログだけを閉じられるよう、履歴を1つ積む
+  if (!navState().dialog) navGo(Object.assign({}, navState(), { dialog: true }), 'push');
   document.addEventListener('keydown', onDialogKeyDown, true);
   setTimeout(() => {
     if (hasInput) { inputEl.focus(); inputEl.select(); } else { okBtn.focus(); }
@@ -1898,7 +2058,7 @@ function openDialog(opts) {
 
 // accepted=true でOK、false でキャンセル。
 // 入力欄ありなら文字列 / null、なしなら true / false を返す。
-function closeDialog(accepted) {
+function closeDialog(accepted, keepHistory) {
   if (!_dialogResolve) return;
   const resolve = _dialogResolve;
   _dialogResolve = null;
@@ -1909,6 +2069,8 @@ function closeDialog(accepted) {
 
   $('#modal-confirm').classList.remove('show');
   document.removeEventListener('keydown', onDialogKeyDown, true);
+  // 自分で閉じたときは、ダイアログ用に積んだ履歴も戻しておく
+  if (!keepHistory && navState().dialog) navPop();
   resolve(value);
 }
 
@@ -2783,7 +2945,7 @@ async function createNewList() {
   }
   App.metadata.lists[name] = { type: 'user', created: new Date().toISOString().slice(0, 10) };
   await saveMetadata();
-  hideModal('modal-new-list');
+  closeModal('modal-new-list');
   renderTabs();
   toast(`「${name}」を作成`);
 }
@@ -2869,7 +3031,7 @@ function unhideBook(bookId) {
   }
 }
 
-function openSettingsModal() {
+function openSettingsModal(navMode) {
   const list = $('#hidden-list');
   const hidden = App.metadata.hiddenBooks || [];
   const countEl = $('#hidden-count');
@@ -2933,7 +3095,8 @@ function openSettingsModal() {
     extraBtns.appendChild(btn);
   }
 
-  showModal('modal-settings');
+  if (navMode === 'none') showModal('modal-settings');
+  else openModal('modal-settings');
 }
 
 function exportList(listName) {
@@ -3074,7 +3237,7 @@ async function deleteBook(bookId) {
   const title = meta.title || bookId;
   const ok = await confirmDialog(`「${title}」をDropboxから完全に削除しますか？\nこの操作は取り消せません。`,
     { title: '作品の削除', okText: '削除', danger: true });
-  if (!ok) return;
+  if (!ok) return false;
 
   toast('削除中...');
   try {
@@ -3082,7 +3245,7 @@ async function deleteBook(bookId) {
   } catch (e) {
     console.error('Failed to delete folder:', e);
     toast('フォルダ削除に失敗しました');
-    return;
+    return false;
   }
 
   // Remove from metadata
@@ -3098,22 +3261,24 @@ async function deleteBook(bookId) {
 
   renderGrid();
   toast(`「${title}」を削除しました`);
+  return true;
 }
 
 // ============================================================
 // FOLDER BROWSER
 // ============================================================
-async function openFolderBrowser(bookId) {
+async function openFolderBrowser(bookId, navMode) {
   const meta = App.metadata.books[bookId] || {};
   $('#folder-modal-title').textContent = meta.title || bookId;
   $('#folder-modal-path').textContent = 'books/' + bookId;
   $('#folder-tree').innerHTML = '<div class="shelf-loading"><div class="spinner"></div></div>';
-  showModal('modal-folder');
+  if (navMode === 'none') showModal('modal-folder');
+  else openModal('modal-folder', { bookId: bookId });
 
   // Delete entire book folder button
   $('#folder-modal-delete').onclick = async () => {
-    hideModal('modal-folder');
-    await deleteBook(bookId);
+    // 先に確認ダイアログを出し、削除したときだけモーダルを閉じる
+    if (await deleteBook(bookId)) closeModal('modal-folder');
   };
 
   const tree = await buildFolderTree('books/' + bookId, 0, bookId);
@@ -3223,7 +3388,7 @@ function formatSize(bytes) {
 // ============================================================
 // READER
 // ============================================================
-async function openReader(bookId) {
+async function openReader(bookId, navMode) {
   App.currentBook = bookId;
   App.pageCache = {};
   App.toolbarVisible = false;
@@ -3246,7 +3411,7 @@ async function openReader(bookId) {
   updateBindingBtn();
 
   showScreen('reader');
-  history.pushState({ screen: 'reader', bookId: bookId }, '', '#read/' + encodeURIComponent(bookId));
+  navGo({ screen: 'reader', bookId: bookId }, navMode || 'push');
   $('#reader-loading').style.display = 'flex';
   $('#reader-img').src = '';
 
@@ -3556,6 +3721,17 @@ function onSliderChange() {
 }
 
 function closeReader(fromPopState) {
+  // 自分から閉じるときは履歴を1つ戻し、実際の後片付けは popstate 側で行う
+  if (!fromPopState) {
+    const s = navState();
+    if (s.screen === 'reader') {
+      if (navPop()) return;
+      // 戻る先が無い（リロード直後など）ときは state を差し替えて自力で閉じる
+      navIntendedDepth = 0;
+      history.replaceState({ screen: 'shelf', depth: 0 }, '', location.pathname + location.search);
+    }
+  }
+
   // Save progress immediately (only for normal books, not bmList)
   if (!App.bmListMode && App.currentBook && App.metadata.books[App.currentBook]) {
     App.metadata.books[App.currentBook].lastReadPage = App.currentPage;
@@ -3587,33 +3763,27 @@ function closeReader(fromPopState) {
   App.currentBook = null;
 
   showScreen('shelf');
-  if (!fromPopState) {
-    history.pushState({ screen: 'shelf' }, '', window.location.pathname);
-  }
   renderGrid(); // Update progress bars
 }
 
 function onPopState(e) {
-  const state = e.state;
-  // 戻る操作でダイアログが取り残されないようキャンセル扱いで閉じる
-  closeDialog(false);
-  if (!state || state.screen === 'shelf') {
-    if (App.currentBook) closeReader(true);
-    // Close any open modals
-    hideModal('modal-new-list');
-    hideModal('modal-folder');
-    hideModal('modal-bm-browser');
-  } else if (state.screen === 'reader' && state.bookId) {
-    openReader(state.bookId);
-  } else if (state.screen === 'reader' && state.bmList) {
-    openBmListReader(state.bmList);
-  }
+  navSyncDepth(e.state);
+  applyNavState(e.state);
 }
 
 // ============================================================
 // KEYBOARD
 // ============================================================
 function onKeyDown(e) {
+  // モーダルが開いていれば Escape で閉じる（履歴も戻す）
+  if (e.key === 'Escape') {
+    const s = navState();
+    if (s.modal && isModalOpen(s.modal)) {
+      e.preventDefault();
+      closeModal(s.modal);
+      return;
+    }
+  }
   if ($('#reader-screen').style.display !== 'flex') return;
   // Don't capture keys when editing bookmark note
   if (e.target.classList.contains('bm-note-input') || e.target.classList.contains('bmlist-new-input')) return;
@@ -3925,10 +4095,11 @@ function getAllBookmarksSorted() {
   return all;
 }
 
-function openBmBrowser() {
+function openBmBrowser(navMode) {
   App.bmBrowserDetail = null;
   renderBmBrowser();
-  showModal('modal-bm-browser');
+  if (navMode === 'none') showModal('modal-bm-browser');
+  else openModal('modal-bm-browser');
 }
 
 function renderBmBrowser() {
@@ -4157,6 +4328,7 @@ function renderBmBrowserLists(body) {
       if (e.target.closest('.bm-all-btn')) return;
       App.bmBrowserDetail = name;
       renderBmBrowser();
+      navGo(Object.assign({}, navState(), { bmDetail: name }), 'push');
     });
 
     // Read button
@@ -4204,6 +4376,7 @@ function renderBmListDetail(body, listName) {
     <button class="bmlist-detail-read" ${items.length === 0 ? 'disabled' : ''}>▶ 読む</button>
   `;
   header.querySelector('.bmlist-detail-back').onclick = () => {
+    if (navState().bmDetail && navPop()) return;
     App.bmBrowserDetail = null;
     renderBmBrowser();
   };
@@ -4454,7 +4627,7 @@ async function exportBmListImages(listName) {
 // ============================================================
 // BM LIST READER (read a bmList as a virtual book)
 // ============================================================
-async function openBmListReader(listName) {
+async function openBmListReader(listName, navMode) {
   const list = App.metadata.bmLists[listName];
   if (!list || !list.items || list.items.length === 0) {
     toast('空のマイリストです');
@@ -4523,7 +4696,7 @@ async function openBmListReader(listName) {
   $('#reader-binding-btn').textContent = bmRtl ? '右綴じ' : '左綴じ';
 
   showScreen('reader');
-  history.pushState({ screen: 'reader', bmList: listName }, '', '#bmlist/' + encodeURIComponent(listName));
+  navGo({ screen: 'reader', bmList: listName }, navMode || 'push');
   $('#reader-loading').style.display = 'flex';
   $('#reader-img').src = '';
 
@@ -4605,7 +4778,7 @@ async function bmListPrefetchOne(pageNum) {
 }
 
 // Helper: open a specific book at a specific page
-async function openReaderAtPage(bookId, page) {
+async function openReaderAtPage(bookId, page, navMode) {
   App.currentBook = bookId;
   App.pageCache = {};
   App.toolbarVisible = false;
@@ -4628,7 +4801,7 @@ async function openReaderAtPage(bookId, page) {
   updateBindingBtn();
 
   showScreen('reader');
-  history.pushState({ screen: 'reader', bookId: bookId }, '', '#read/' + encodeURIComponent(bookId));
+  navGo({ screen: 'reader', bookId: bookId }, navMode || 'push');
   $('#reader-loading').style.display = 'flex';
   $('#reader-img').src = '';
 
